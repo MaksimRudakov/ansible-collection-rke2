@@ -1,0 +1,64 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars_files:
+    - ../../roles/node/defaults/main.yml
+  tasks:
+    - name: Check installed stub version
+      ansible.builtin.command:
+        cmd: /usr/local/bin/rke2 --version
+      register: rke2_stub_version
+      changed_when: false
+
+    - name: Assert requested version was passed to the installer
+      ansible.builtin.assert:
+        that:
+          - rke2_version in rke2_stub_version.stdout
+
+    - name: Read stub install marker
+      ansible.builtin.slurp:
+        src: /var/tmp/rke2-stub-install.done
+      register: rke2_stub_marker
+
+    - name: Assert installer received the node type
+      ansible.builtin.assert:
+        that:
+          - "'type=server' in (rke2_stub_marker.content | b64decode)"
+
+    - name: Find leftover install scripts in /tmp
+      ansible.builtin.find:
+        paths: /tmp
+        patterns: "rke2-install*"
+      register: rke2_leftover_scripts
+
+    - name: Assert install script was removed
+      ansible.builtin.assert:
+        that:
+          - rke2_leftover_scripts.matched == 0
+
+    - name: Attempt a downgrade (must be refused)
+      block:
+        - name: Include install tasks with an older version
+          ansible.builtin.include_role:
+            name: maksimrudakov.rke2.node
+            tasks_from: install
+          vars:
+            rke2_role: server
+            rke2_airgap: true
+            rke2_mirror_base: "http://127.0.0.1:8080"
+            rke2_sysctl_params: []
+            rke2_version: "v1.0.0+rke2r1"
+
+        - name: Mark unexpected success
+          ansible.builtin.set_fact:
+            rke2_downgrade_refused: false
+      rescue:
+        - name: Mark refusal
+          ansible.builtin.set_fact:
+            rke2_downgrade_refused: true
+
+    - name: Assert downgrade was refused
+      ansible.builtin.assert:
+        that:
+          - rke2_downgrade_refused | default(false)

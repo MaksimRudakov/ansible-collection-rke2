@@ -1,0 +1,97 @@
+---
+- name: Configure kernel sysctl parameters for Kubernetes
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-kubernetes-sysctl.conf
+    reload: true
+  loop: "{{ rke2_sysctl_params }}"
+
+- name: Create rancher config directory
+  ansible.builtin.file:
+    path: /etc/rancher/rke2
+    state: directory
+    mode: "0755"
+
+- name: Create server manifests directory
+  ansible.builtin.file:
+    path: /var/lib/rancher/rke2/server/manifests
+    state: directory
+    mode: "0755"
+  when: rke2_role == 'server'
+
+- name: Check current RKE2 version
+  ansible.builtin.command:
+    cmd: /usr/local/bin/rke2 --version
+  register: rke2_current_version
+  changed_when: false
+  failed_when: false
+
+- name: Determine rke2 service state
+  ansible.builtin.include_tasks: service_state.yml
+
+- name: Set RKE2 install facts
+  ansible.builtin.set_fact:
+    rke2_installed: "{{ rke2_current_version.rc == 0 }}"
+    rke2_installed_version: "{{ rke2_current_version.stdout | default('') | regex_search('v\\d+\\.\\d+\\.\\d+\\+rke2r\\d+') | default('', true) }}"
+    rke2_needs_upgrade: "{{ rke2_current_version.rc == 0 and rke2_version not in (rke2_current_version.stdout | default('')) }}"
+
+# Downgrade is not supported by RKE2 (etcd schema / API migrations are one-way)
+- name: Refuse RKE2 downgrade
+  ansible.builtin.assert:
+    that:
+      - >-
+        rke2_version | regex_replace('^v', '') | regex_replace('\+rke2r', '.')
+        is version(rke2_installed_version | regex_replace('^v', '') | regex_replace('\+rke2r', '.'), '>=')
+    fail_msg: >-
+      Requested version {{ rke2_version }} is older than installed
+      {{ rke2_installed_version }}. RKE2 does not support downgrades;
+      set rke2_allow_downgrade=true only if you know what you are doing.
+  when:
+    - rke2_needs_upgrade
+    - rke2_installed_version | length > 0
+    - not (rke2_allow_downgrade | bool)
+
+- name: Create temporary file for install script
+  ansible.builtin.tempfile:
+    state: file
+    prefix: rke2-install.
+    suffix: .sh
+  register: rke2_install_script_tmp
+  when: not rke2_installed or rke2_needs_upgrade
+
+- name: Download RKE2 install script
+  ansible.builtin.get_url:
+    url: "{{ rke2_airgap_install_script_url if rke2_airgap else rke2_install_script_url }}"
+    dest: "{{ rke2_install_script_tmp.path }}"
+    mode: "0700"
+    validate_certs: "{{ rke2_mirror_validate_certs if rke2_airgap else true }}"
+    force: true
+  when: not rke2_installed or rke2_needs_upgrade
+
+- name: Patch install script for air-gapped mirrors
+  ansible.builtin.replace:
+    path: "{{ rke2_install_script_tmp.path }}"
+    regexp: "{{ item.regexp }}"
+    replace: "{{ item.replace }}"
+  loop: "{{ rke2_airgap_url_rewrites }}"
+  when:
+    - rke2_airgap | bool
+    - not rke2_installed or rke2_needs_upgrade
+
+- name: Run RKE2 install script
+  ansible.builtin.command:
+    cmd: "bash {{ rke2_install_script_tmp.path }}"
+  environment: >-
+    {{ {'INSTALL_RKE2_VERSION': rke2_version, 'INSTALL_RKE2_TYPE': rke2_role}
+       | combine({'INSTALL_RKE2_METHOD': rke2_install_method} if rke2_install_method | length > 0 else {}) }}
+  changed_when: true
+  notify: Restart rke2
+  when: not rke2_installed or rke2_needs_upgrade
+
+- name: Remove install script
+  ansible.builtin.file:
+    path: "{{ rke2_install_script_tmp.path }}"
+    state: absent
+  when: rke2_install_script_tmp.path is defined

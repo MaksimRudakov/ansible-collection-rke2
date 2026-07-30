@@ -1,0 +1,89 @@
+---
+# Rolling reapply of config.yaml / registries.yaml with a guarded restart.
+# No drain: containerd is not restarted, workloads keep running.
+#
+# Use for changes to kubelet-arg, component args, node labels/taints,
+# registry mirrors, etcd-expose-metrics etc. For tls-san changes use
+# maksimrudakov.rke2.rotate_certs.
+#
+# Usage:
+#   ansible-playbook maksimrudakov.rke2.reconfig -i inventory/<env>/
+#   ansible-playbook maksimrudakov.rke2.reconfig -i inventory/<env>/ -l rke2_agents
+
+- name: Reconfigure RKE2 agents (rolling)
+  hosts: rke2_agents
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    rke2_role: agent
+  tasks:
+    - name: Cordon node
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: cordon
+
+    - name: Apply RKE2 config
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: config
+
+    - name: Restart now if config changed
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for node Ready
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: wait_ready
+
+    - name: Uncordon node
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: uncordon
+
+    - name: Pause before next agent
+      ansible.builtin.pause:
+        seconds: "{{ rke2_reconfig_pause_agents | default(30) }}"
+
+- name: Reconfigure RKE2 servers (rolling)
+  hosts: rke2_servers
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    rke2_role: server
+    rke2_kubectl_delegate: >-
+      {{ (groups['rke2_servers'] | difference([inventory_hostname]) | first)
+         | default(inventory_hostname) }}
+  tasks:
+    - name: Cordon node
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: cordon
+
+    - name: Apply RKE2 config
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: config
+
+    - name: Restart now if config changed
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for local K8s API
+      ansible.builtin.wait_for:
+        port: 6443
+        timeout: 300
+
+    - name: Wait for node Ready
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: wait_ready
+
+    - name: Uncordon node
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: uncordon
+
+    - name: Pause for etcd stabilization
+      ansible.builtin.pause:
+        seconds: "{{ rke2_reconfig_pause_servers | default(60) }}"

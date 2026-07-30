@@ -1,0 +1,37 @@
+---
+# Rotate kube-apiserver serving certificates (e.g. after changing
+# rke2_tls_san): reapply config, remove serving certs, restart, wait.
+#
+# Usage:
+#   ansible-playbook maksimrudakov.rke2.rotate_certs -i inventory/<env>/
+
+- name: Rotate RKE2 API server certificates (rolling)
+  hosts: rke2_servers
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    rke2_role: server
+  tasks:
+    - name: Apply RKE2 config (refresh tls-san)
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: config
+
+    - name: Remove serving certificates
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: rotate_certs
+
+    - name: Restart rke2-server now
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for local K8s API
+      ansible.builtin.wait_for:
+        port: 6443
+        timeout: 300
+
+    - name: Wait for node Ready
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: wait_ready

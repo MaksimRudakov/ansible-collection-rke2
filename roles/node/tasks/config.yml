@@ -1,0 +1,47 @@
+---
+# When included standalone (tasks_from: config) the restart-guard fact from
+# install.yml is missing — populate it so the handler can fire
+- name: Determine rke2 service state for restart guard
+  ansible.builtin.include_tasks: service_state.yml
+  when: rke2_service_active is not defined
+
+- name: Deploy registries.yaml
+  ansible.builtin.template:
+    src: registries.yaml.j2
+    dest: /etc/rancher/rke2/registries.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: "{{ rke2_no_log }}"
+  notify: Restart rke2
+  when: rke2_registry_mirrors | length > 0 or rke2_registry_configs | length > 0
+
+- name: Remove registries.yaml when no registries are configured
+  ansible.builtin.file:
+    path: /etc/rancher/rke2/registries.yaml
+    state: absent
+  notify: Restart rke2
+  when:
+    - rke2_registry_mirrors | length == 0
+    - rke2_registry_configs | length == 0
+
+- name: Deploy RKE2 config.yaml
+  ansible.builtin.template:
+    src: "config-{{ rke2_role }}.yaml.j2"
+    dest: /etc/rancher/rke2/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: "{{ rke2_no_log }}"
+  notify: Restart rke2
+
+- name: Deploy Cilium HelmChartConfig
+  ansible.builtin.template:
+    src: rke2-cilium-config.yaml.j2
+    dest: /var/lib/rancher/rke2/server/manifests/rke2-cilium-config.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - rke2_role == 'server'
+    - rke2_cni == 'cilium'

@@ -1,0 +1,24 @@
+---
+driver:
+  name: docker
+platforms:
+  - name: rke2-server
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    command: /lib/systemd/systemd
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      # containerd cannot run overlayfs on top of the container's own
+      # overlayfs rootfs; an anonymous volume gives it a real filesystem
+      - /var/lib/rancher
+    devices:
+      - /dev/kmsg
+provisioner:
+  name: ansible
+  env:
+    # collection root is <...>/collections/ansible_collections/maksimrudakov/rke2;
+    # keep the default user path so community.docker etc. stay resolvable
+    ANSIBLE_COLLECTIONS_PATH: "${MOLECULE_PROJECT_DIRECTORY}/../../..:${HOME}/.ansible/collections"
+verifier:
+  name: ansible

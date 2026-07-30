@@ -1,0 +1,6 @@
+.vscode
+*.retry
+.cache/
+__pycache__/
+.ansible/
+*.tar.gz

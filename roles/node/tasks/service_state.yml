@@ -1,0 +1,7 @@
+---
+- name: Check rke2 service state
+  ansible.builtin.service_facts:
+
+- name: Set rke2 service state fact
+  ansible.builtin.set_fact:
+    rke2_service_active: "{{ (ansible_facts.services['rke2-' ~ rke2_role ~ '.service'].state | default('')) == 'running' }}"

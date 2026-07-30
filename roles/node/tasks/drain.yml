@@ -1,0 +1,10 @@
+---
+- name: Drain node
+  ansible.builtin.command:
+    cmd: >-
+      {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}
+      drain {{ rke2_node_name }}
+      --ignore-daemonsets --delete-emptydir-data
+      --timeout={{ rke2_drain_timeout }}s
+  delegate_to: "{{ rke2_kubectl_delegate }}"
+  changed_when: true

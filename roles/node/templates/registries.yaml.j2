@@ -1,0 +1,23 @@
+{% if rke2_registry_mirrors | length > 0 %}
+mirrors:
+{% for mirror in rke2_registry_mirrors %}
+  {{ mirror.name }}:
+    endpoint:
+      - "{{ mirror.endpoint }}"
+{% endfor %}
+{% endif %}
+{% if rke2_registry_configs | length > 0 %}
+configs:
+{% for cfg in rke2_registry_configs %}
+  "{{ cfg.host }}":
+{% if cfg.username is defined and cfg.password is defined %}
+    auth:
+      username: "{{ cfg.username }}"
+      password: "{{ cfg.password }}"
+{% endif %}
+{% if cfg.insecure_skip_verify | default(false) %}
+    tls:
+      insecure_skip_verify: true
+{% endif %}
+{% endfor %}
+{% endif %}

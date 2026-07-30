@@ -1,0 +1,12 @@
+---
+profile: production
+
+exclude_paths:
+  - .cache/
+  - .github/
+  - .ansible/
+
+skip_list:
+  # Role vars deliberately use the collection-wide rke2_ prefix instead of
+  # the role-name prefix (node_) — consistency and migration compatibility
+  - var-naming[no-role-prefix]

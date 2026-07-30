@@ -1,0 +1,16 @@
+---
+rke2_version: "v1.34.3+rke2r3"
+
+# Stable registration address (DNS RR / VIP) is preferred over the
+# auto-derived first-master address
+rke2_server_url: "https://<RKE2_API_VIP>:9345"
+
+rke2_tls_san:
+  - <RKE2_API_FQDN>
+
+# Air-gapped installation through an internal mirror:
+# rke2_airgap: true
+# rke2_mirror_base: "https://<NEXUS_HOST>"
+# rke2_registry_mirrors:
+#   - name: docker.io
+#     endpoint: "{{ rke2_mirror_base }}"

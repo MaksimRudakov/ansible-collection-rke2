@@ -1,0 +1,27 @@
+---
+- name: Enable and start rke2-server
+  ansible.builtin.systemd_service:
+    name: rke2-server
+    enabled: true
+    state: started
+
+- name: Wait for node token
+  ansible.builtin.wait_for:
+    path: "{{ rke2_data_dir }}/server/node-token"
+    timeout: "{{ rke2_token_wait_timeout }}"
+
+- name: Read node token
+  ansible.builtin.slurp:
+    src: "{{ rke2_data_dir }}/server/node-token"
+  register: rke2_node_token_raw
+  no_log: "{{ rke2_no_log }}"
+
+- name: Set token fact
+  ansible.builtin.set_fact:
+    rke2_generated_token: "{{ rke2_node_token_raw.content | b64decode | trim }}"
+  no_log: "{{ rke2_no_log }}"
+
+- name: Wait for K8s API
+  ansible.builtin.wait_for:
+    port: 6443
+    timeout: "{{ rke2_api_wait_timeout }}"

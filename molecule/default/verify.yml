@@ -1,0 +1,26 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Get cluster nodes
+      ansible.builtin.command:
+        cmd: >-
+          /var/lib/rancher/rke2/bin/kubectl
+          --kubeconfig /etc/rancher/rke2/rke2.yaml
+          get nodes --no-headers
+      register: rke2_nodes
+      changed_when: false
+      retries: 30
+      delay: 10
+      until: "' Ready' in rke2_nodes.stdout"
+
+    - name: Check config file permissions
+      ansible.builtin.stat:
+        path: /etc/rancher/rke2/config.yaml
+      register: rke2_config_stat
+
+    - name: Assert config.yaml is not world-readable
+      ansible.builtin.assert:
+        that:
+          - rke2_config_stat.stat.mode == '0600'

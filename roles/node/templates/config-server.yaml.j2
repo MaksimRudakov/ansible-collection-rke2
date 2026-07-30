@@ -1,0 +1,78 @@
+{# The bootstrap server must not have server: — it would try to join an
+   existing cluster. Safe to set rke2_server_url cluster-wide in group_vars #}
+{% if rke2_server_url | length > 0 and not (rke2_first_server | default(false)) %}
+server: {{ rke2_server_url }}
+{% endif %}
+{% if rke2_token | length > 0 %}
+token: {{ rke2_token }}
+{% endif %}
+{% if rke2_tls_san | length > 0 %}
+tls-san:
+{% for san in rke2_tls_san %}
+  - {{ san }}
+{% endfor %}
+{% endif %}
+cni: {{ rke2_cni }}
+{% if rke2_disable_components | length > 0 %}
+disable:
+{% for component in rke2_disable_components %}
+  - {{ component }}
+{% endfor %}
+{% endif %}
+disable-kube-proxy: {{ rke2_disable_kube_proxy | lower }}
+etcd-expose-metrics: {{ rke2_etcd_expose_metrics | lower }}
+write-kubeconfig-mode: "{{ rke2_write_kubeconfig_mode }}"
+{% if rke2_cis_profile | length > 0 %}
+profile: {{ rke2_cis_profile }}
+{% endif %}
+{% if rke2_cluster_cidr | length > 0 %}
+cluster-cidr: {{ rke2_cluster_cidr }}
+{% endif %}
+{% if rke2_service_cidr | length > 0 %}
+service-cidr: {{ rke2_service_cidr }}
+{% endif %}
+{% if rke2_node_labels | length > 0 %}
+node-label:
+{% for label in rke2_node_labels %}
+  - {{ label }}
+{% endfor %}
+{% endif %}
+{% if rke2_node_taints | length > 0 %}
+node-taint:
+{% for taint in rke2_node_taints %}
+  - {{ taint }}
+{% endfor %}
+{% endif %}
+{% if rke2_kubelet_arg | length > 0 %}
+kubelet-arg:
+{% for arg in rke2_kubelet_arg %}
+  - "{{ arg }}"
+{% endfor %}
+{% endif %}
+{% if rke2_kube_apiserver_arg | length > 0 %}
+kube-apiserver-arg:
+{% for arg in rke2_kube_apiserver_arg %}
+  - "{{ arg }}"
+{% endfor %}
+{% endif %}
+{% if rke2_kube_controller_manager_arg | length > 0 %}
+kube-controller-manager-arg:
+{% for arg in rke2_kube_controller_manager_arg %}
+  - "{{ arg }}"
+{% endfor %}
+{% endif %}
+{% if rke2_kube_scheduler_arg | length > 0 %}
+kube-scheduler-arg:
+{% for arg in rke2_kube_scheduler_arg %}
+  - "{{ arg }}"
+{% endfor %}
+{% endif %}
+{% if rke2_etcd_arg | length > 0 %}
+etcd-arg:
+{% for arg in rke2_etcd_arg %}
+  - "{{ arg }}"
+{% endfor %}
+{% endif %}
+{% if rke2_extra_config | length > 0 %}
+{{ rke2_extra_config | to_nice_yaml(indent=2) }}
+{% endif %}

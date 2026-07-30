@@ -1,0 +1,15 @@
+---
+# Retries cover the window right after join when the Node object
+# does not exist yet and kubectl wait fails immediately
+- name: Wait for node Ready
+  ansible.builtin.command:
+    cmd: >-
+      {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}
+      wait --for=condition=Ready node/{{ rke2_node_name }}
+      --timeout={{ rke2_ready_timeout }}s
+  delegate_to: "{{ rke2_kubectl_delegate }}"
+  register: rke2_wait_ready
+  until: rke2_wait_ready.rc == 0
+  retries: 5
+  delay: 10
+  changed_when: false

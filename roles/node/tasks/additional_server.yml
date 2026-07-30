@@ -1,0 +1,11 @@
+---
+- name: Enable and start rke2-server
+  ansible.builtin.systemd_service:
+    name: rke2-server
+    enabled: true
+    state: started
+
+- name: Wait for K8s API
+  ansible.builtin.wait_for:
+    port: 6443
+    timeout: "{{ rke2_api_wait_timeout }}"

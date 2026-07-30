@@ -1,0 +1,23 @@
+server: {{ rke2_server_url }}
+token: {{ rke2_token }}
+{% if rke2_node_labels | length > 0 %}
+node-label:
+{% for label in rke2_node_labels %}
+  - {{ label }}
+{% endfor %}
+{% endif %}
+{% if rke2_node_taints | length > 0 %}
+node-taint:
+{% for taint in rke2_node_taints %}
+  - {{ taint }}
+{% endfor %}
+{% endif %}
+{% if rke2_kubelet_arg | length > 0 %}
+kubelet-arg:
+{% for arg in rke2_kubelet_arg %}
+  - "{{ arg }}"
+{% endfor %}
+{% endif %}
+{% if rke2_extra_config | length > 0 %}
+{{ rke2_extra_config | to_nice_yaml(indent=2) }}
+{% endif %}

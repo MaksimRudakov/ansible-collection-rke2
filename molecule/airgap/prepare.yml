@@ -1,0 +1,71 @@
+---
+- name: Prepare mock mirror
+  hosts: all
+  become: true
+  tasks:
+    - name: Create mock mirror directory layout
+      ansible.builtin.file:
+        path: /srv/mirror/repository/raw.githubusercontent.com/rancher/rke2/master
+        state: directory
+        mode: "0755"
+
+    # Stub install.sh: contains the upstream URLs the role must rewrite,
+    # self-checks the rewrites and installs a fake rke2 binary reporting
+    # INSTALL_RKE2_VERSION so the role's idempotency check works.
+    - name: Deploy stub install.sh
+      ansible.builtin.copy:
+        dest: /srv/mirror/repository/raw.githubusercontent.com/rancher/rke2/master/install.sh
+        mode: "0644"
+        content: |
+          #!/bin/sh
+          # Upstream URLs that the role must rewrite to the mirror:
+          #   https://update.rke2.io/v1-release/channels
+          #   https://github.com/rancher/rke2/releases/download
+          #   https://rpm.rancher.io/rke2/stable
+          set -eu
+
+          fail() { echo "FAIL: $1" >&2; exit 1; }
+
+          grep -q 'http://127.0.0.1:8080/repository/update.rke2.io/v1-release/channels' "$0" \
+            || fail 'update.rke2.io was not rewritten to the mirror'
+          grep -q 'http://127.0.0.1:8080/repository/github.com/rancher/rke2/releases/download' "$0" \
+            || fail 'github.com was not rewritten to the mirror'
+          grep -q 'http://127.0.0.1:8080/repository/rpm.rancher.io/rke2/stable' "$0" \
+            || fail 'rpm.rancher.io was not rewritten to the mirror'
+
+          [ -n "${INSTALL_RKE2_VERSION:-}" ] || fail 'INSTALL_RKE2_VERSION is not set'
+          [ -n "${INSTALL_RKE2_TYPE:-}" ] || fail 'INSTALL_RKE2_TYPE is not set'
+
+          cat > /usr/local/bin/rke2 <<EOF
+          #!/bin/sh
+          echo "rke2 version ${INSTALL_RKE2_VERSION} (molecule-stub)"
+          EOF
+          chmod 0755 /usr/local/bin/rke2
+
+          echo "type=${INSTALL_RKE2_TYPE}" > /var/tmp/rke2-stub-install.done
+
+    - name: Deploy mock mirror systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/mock-mirror.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Mock RKE2 mirror
+
+          [Service]
+          ExecStart=/usr/bin/python3 -m http.server 8080 --directory /srv/mirror
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start mock mirror
+      ansible.builtin.systemd_service:
+        name: mock-mirror
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Wait for mock mirror port
+      ansible.builtin.wait_for:
+        port: 8080
+        timeout: 30

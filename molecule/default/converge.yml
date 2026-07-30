@@ -1,0 +1,11 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    rke2_role: server
+    rke2_first_server: true
+    rke2_no_log: false
+    rke2_sysctl_params: []  # not writable inside a container
+  roles:
+    - role: maksimrudakov.rke2.node

@@ -1,0 +1,206 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy an RKE2 node (server or agent)
+    description:
+      - Installs RKE2, deploys config.yaml / registries.yaml and joins the node
+        to the cluster. Supports online and air-gapped installation.
+    options:
+      rke2_role:
+        type: str
+        required: true
+        choices: [server, agent]
+        description: Node role.
+      rke2_version:
+        type: str
+        default: v1.34.3+rke2r3
+        description: RKE2 version to install.
+      rke2_servers_group:
+        type: str
+        default: rke2_servers
+        description: Inventory group with control-plane nodes; its first host bootstraps the cluster.
+      rke2_bootstrap_host:
+        type: str
+        description: Bootstrap host. Default — first host of rke2_servers_group.
+      rke2_first_server:
+        type: bool
+        description: >-
+          Bootstrap flag. Default — true when this host is the first of
+          rke2_servers_group. Set explicitly for other group layouts.
+      rke2_server_url:
+        type: str
+        default: ""
+        description: >-
+          Registration URL (https://<host>:9345). Empty — derived from the
+          bootstrap host. Prefer a stable DNS RR / VIP address in production.
+      rke2_token:
+        type: str
+        default: ""
+        description: Cluster join token. Empty — fetched from the bootstrap host over delegation.
+      rke2_data_dir:
+        type: str
+        default: /var/lib/rancher/rke2
+        description: RKE2 data directory.
+      rke2_kubectl:
+        type: str
+        description: Path to the RKE2-bundled kubectl binary.
+      rke2_kubeconfig:
+        type: str
+        default: /etc/rancher/rke2/rke2.yaml
+        description: Path to the cluster kubeconfig used by lifecycle helpers.
+      rke2_node_name:
+        type: str
+        description: Node object name for cordon/drain/wait helpers. Default — inventory_hostname.
+      rke2_kubectl_delegate:
+        type: str
+        description: Host that runs kubectl for lifecycle helpers. Default — the bootstrap host.
+      rke2_drain_timeout:
+        type: int
+        default: 120
+        description: kubectl drain timeout in seconds.
+      rke2_ready_timeout:
+        type: int
+        default: 300
+        description: kubectl wait --for=condition=Ready timeout in seconds.
+      rke2_airgap:
+        type: bool
+        default: false
+        description: Install from an internal mirror instead of get.rke2.io.
+      rke2_mirror_base:
+        type: str
+        default: ""
+        description: Base URL of the internal mirror. Required when rke2_airgap is true.
+      rke2_mirror_validate_certs:
+        type: bool
+        default: true
+        description: Validate TLS certificates when downloading from the mirror.
+      rke2_airgap_install_script_url:
+        type: str
+        description: Full URL of install.sh on the mirror (air-gapped mode).
+      rke2_airgap_url_rewrites:
+        type: list
+        elements: dict
+        description: regexp/replace pairs applied to install.sh in air-gapped mode.
+      rke2_install_script_url:
+        type: str
+        default: https://get.rke2.io
+        description: Install script URL for online mode.
+      rke2_install_method:
+        type: str
+        default: ""
+        choices: ["", tar, rpm]
+        description: Forwarded as INSTALL_RKE2_METHOD. Use tar on air-gapped RHEL-family hosts.
+      rke2_allow_downgrade:
+        type: bool
+        default: false
+        description: >-
+          Allow installing an rke2_version older than the currently installed one.
+          RKE2 does not support downgrades; leave false in production.
+      rke2_cni:
+        type: str
+        default: cilium
+        description: CNI plugin. Cilium HelmChartConfig is deployed only when set to cilium.
+      rke2_disable_kube_proxy:
+        type: bool
+        default: true
+        description: Disable kube-proxy (Cilium kube-proxy replacement).
+      rke2_disable_components:
+        type: list
+        elements: str
+        default: [rke2-ingress-nginx]
+        description: RKE2 packaged components to disable.
+      rke2_tls_san:
+        type: list
+        elements: str
+        default: []
+        description: Extra SANs for the API server certificate.
+      rke2_etcd_expose_metrics:
+        type: bool
+        default: true
+        description: Expose etcd metrics.
+      rke2_write_kubeconfig_mode:
+        type: str
+        default: "0600"
+        description: File mode of the generated kubeconfig.
+      rke2_cis_profile:
+        type: str
+        default: ""
+        description: CIS hardening profile (e.g. cis). Empty disables it.
+      rke2_cluster_cidr:
+        type: str
+        default: ""
+        description: Pod network CIDR. Empty uses the RKE2 default.
+      rke2_service_cidr:
+        type: str
+        default: ""
+        description: Service network CIDR. Empty uses the RKE2 default.
+      rke2_node_labels:
+        type: list
+        elements: str
+        default: []
+        description: Node labels (key=value).
+      rke2_node_taints:
+        type: list
+        elements: str
+        default: []
+        description: Node taints (key=value:Effect).
+      rke2_kubelet_arg:
+        type: list
+        elements: str
+        description: Extra kubelet arguments.
+      rke2_kube_apiserver_arg:
+        type: list
+        elements: str
+        default: []
+        description: Extra kube-apiserver arguments (server only).
+      rke2_kube_controller_manager_arg:
+        type: list
+        elements: str
+        description: Extra kube-controller-manager arguments (server only).
+      rke2_kube_scheduler_arg:
+        type: list
+        elements: str
+        default: []
+        description: Extra kube-scheduler arguments (server only).
+      rke2_etcd_arg:
+        type: list
+        elements: str
+        default: []
+        description: Extra etcd arguments (server only).
+      rke2_extra_config:
+        type: dict
+        default: {}
+        description: Arbitrary extra keys merged into config.yaml as-is.
+      rke2_registry_mirrors:
+        type: list
+        elements: dict
+        default: []
+        description: Registry mirrors for registries.yaml (name, endpoint).
+      rke2_registry_configs:
+        type: list
+        elements: dict
+        default: []
+        description: Per-registry auth/TLS config (host, username, password, insecure_skip_verify).
+      rke2_sysctl_params:
+        type: list
+        elements: dict
+        description: Kernel sysctl parameters applied before installation.
+      rke2_cilium_values:
+        type: dict
+        description: Helm values for the rke2-cilium HelmChartConfig.
+      rke2_no_log:
+        type: bool
+        default: true
+        description: Hide output of tasks handling the token and registry credentials.
+      rke2_token_wait_timeout:
+        type: int
+        default: 120
+        description: Seconds to wait for the node token on bootstrap.
+      rke2_api_wait_timeout:
+        type: int
+        default: 180
+        description: Seconds to wait for the K8s API port on servers.
+      rke2_kubelet_wait_timeout:
+        type: int
+        default: 180
+        description: Seconds to wait for the kubelet port on agents.

@@ -1,0 +1,14 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  tasks:
+    - name: Run install tasks in air-gapped mode
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: install
+      vars:
+        rke2_role: server
+        rke2_airgap: true
+        rke2_mirror_base: "http://127.0.0.1:8080"
+        rke2_sysctl_params: []  # not writable inside a container

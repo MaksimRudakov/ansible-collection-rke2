@@ -1,0 +1,6 @@
+---
+- name: Uncordon node
+  ansible.builtin.command:
+    cmd: "{{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }} uncordon {{ rke2_node_name }}"
+  delegate_to: "{{ rke2_kubectl_delegate }}"
+  changed_when: true

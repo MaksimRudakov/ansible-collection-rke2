@@ -1,0 +1,11 @@
+---
+# Restart only if the service was already running before this play: on fresh
+# install / bootstrap the service is started by role tasks and a second
+# restart of a just-bootstrapped node is avoided.
+# WARNING: run server plays with serial: 1 — simultaneous restart of all
+# masters breaks etcd quorum.
+- name: Restart rke2
+  ansible.builtin.systemd_service:
+    name: "rke2-{{ rke2_role }}"
+    state: restarted
+  when: rke2_service_active | default(false)

@@ -1,0 +1,6 @@
+---
+rke2_node_labels:
+  - "node-role.kubernetes.io/runner=true"
+
+rke2_node_taints:
+  - "dedicated=gitlab-runner:NoSchedule"

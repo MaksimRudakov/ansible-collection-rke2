@@ -1,0 +1,170 @@
+---
+rke2_version: "v1.34.3+rke2r3"
+
+# server | agent — must be set per host/group, validated in tasks/main.yml
+# rke2_role: server
+
+# --- Cluster topology ---------------------------------------------------------
+
+# Inventory group with control-plane nodes; its first host bootstraps the
+# cluster and is the source for join token / registration URL
+rke2_servers_group: rke2_servers
+rke2_bootstrap_host: "{{ groups[rke2_servers_group] | default([]) | first | default('') }}"
+
+# Auto-detected: first host of rke2_servers_group bootstraps. Override per
+# host to pin the bootstrap node explicitly
+rke2_first_server: "{{ rke2_bootstrap_host == inventory_hostname }}"
+
+# Registration URL and join token. Empty = derived from the bootstrap host
+# (rke2_server_url from its ansible_host, rke2_token slurped over delegation).
+# For production prefer a stable rke2_server_url (DNS RR / VIP) set explicitly
+rke2_server_url: ""
+rke2_token: ""
+
+# --- Paths and cluster access -------------------------------------------------
+
+rke2_data_dir: /var/lib/rancher/rke2
+rke2_kubectl: "{{ rke2_data_dir }}/bin/kubectl"
+rke2_kubeconfig: /etc/rancher/rke2/rke2.yaml
+
+# Node lifecycle helpers (cordon/drain/uncordon/wait_ready): which node the
+# operation targets and which host runs kubectl
+rke2_node_name: "{{ inventory_hostname }}"
+rke2_kubectl_delegate: "{{ rke2_bootstrap_host | default(inventory_hostname, true) }}"
+rke2_drain_timeout: 120
+rke2_ready_timeout: 300
+
+# --- Installation -----------------------------------------------------------
+
+# Online mode (default): install script is fetched from get.rke2.io
+rke2_install_script_url: "https://get.rke2.io"
+
+# Air-gapped mode: fetch install script from an internal mirror (e.g. Nexus
+# raw proxy) and rewrite upstream URLs inside it to point at the mirror
+rke2_airgap: false
+rke2_mirror_base: ""
+rke2_mirror_validate_certs: true
+rke2_airgap_install_script_url: "{{ rke2_mirror_base }}/repository/raw.githubusercontent.com/rancher/rke2/master/install.sh"
+rke2_airgap_url_rewrites:
+  - regexp: 'https://update\.rke2\.io'
+    replace: "{{ rke2_mirror_base }}/repository/update.rke2.io"
+  - regexp: 'https://github\.com'
+    replace: "{{ rke2_mirror_base }}/repository/github.com"
+  - regexp: 'https://rpm\.rancher\.io'
+    replace: "{{ rke2_mirror_base }}/repository/rpm.rancher.io"
+
+# tar | rpm | empty (installer decides). Use "tar" for air-gapped RHEL-family
+# hosts if the RPM repository is not mirrored
+rke2_install_method: ""
+
+# RKE2 does not support downgrades (one-way etcd/API migrations); the role
+# fails if rke2_version is older than the installed one. Override at your risk
+rke2_allow_downgrade: false
+
+# --- Node configuration -----------------------------------------------------
+
+rke2_cni: cilium
+rke2_disable_kube_proxy: true
+rke2_disable_components:
+  - rke2-ingress-nginx
+
+rke2_tls_san: []
+rke2_etcd_expose_metrics: true
+rke2_write_kubeconfig_mode: "0600"
+
+# CIS hardening profile, e.g. "cis". Empty = disabled
+rke2_cis_profile: ""
+
+# Empty = RKE2 defaults (10.42.0.0/16 / 10.43.0.0/16)
+rke2_cluster_cidr: ""
+rke2_service_cidr: ""
+
+rke2_node_labels: []
+rke2_node_taints: []
+
+rke2_kubelet_arg:
+  - "image-gc-high-threshold=85"
+  - "image-gc-low-threshold=80"
+  - "eviction-hard=memory.available<100Mi,nodefs.available<10%,imagefs.available<15%"
+  - "eviction-soft=memory.available<300Mi,nodefs.available<15%,imagefs.available<20%"
+  - "eviction-soft-grace-period=memory.available=2m30s,nodefs.available=2m30s,imagefs.available=2m30s"
+
+rke2_kube_apiserver_arg: []
+rke2_kube_controller_manager_arg:
+  - "terminated-pod-gc-threshold=12500"
+rke2_kube_scheduler_arg: []
+rke2_etcd_arg: []
+
+# Arbitrary extra keys merged into config.yaml as-is (dict → YAML).
+# Covers any RKE2 option not exposed as a dedicated variable
+rke2_extra_config: {}
+
+# --- Registries -------------------------------------------------------------
+
+rke2_registry_mirrors: []
+# - name: docker.io
+#   endpoint: "https://<MIRROR_HOST>"
+# - name: registry.k8s.io
+#   endpoint: "https://<MIRROR_HOST>"
+
+rke2_registry_configs: []
+# - host: <REGISTRY_HOST>
+#   username: <ROBOT_USER>
+#   password: <ROBOT_PASSWORD>
+#   insecure_skip_verify: false
+
+# --- System tuning ----------------------------------------------------------
+
+rke2_sysctl_params:
+  - name: fs.inotify.max_user_watches
+    value: "524288"
+  - name: fs.inotify.max_user_instances
+    value: "512"
+  - name: fs.file-max
+    value: "1000000"
+
+# --- Misc -------------------------------------------------------------------
+
+# Hide task output that may contain the cluster token or registry credentials.
+# Set to false temporarily when debugging
+rke2_no_log: true
+
+rke2_token_wait_timeout: 120
+rke2_api_wait_timeout: 180
+rke2_kubelet_wait_timeout: 180
+
+rke2_cilium_values:
+  kubeProxyReplacement: true
+  k8sServiceHost: "127.0.0.1"
+  k8sServicePort: "6443"
+  routingMode: tunnel
+  tunnelProtocol: vxlan
+  autoDirectNodeRoutes: false
+  bpf:
+    masquerade: true
+    hostLegacyRouting: false
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+  hubble:
+    enabled: true
+    metrics:
+      enabled:
+        - "dns:sourceContext=workload-name|reserved-identity;destinationContext=workload-name|reserved-identity"
+        - "drop:sourceContext=workload-name|reserved-identity;destinationContext=workload-name|reserved-identity"
+        - "tcp:sourceContext=workload-name|reserved-identity;destinationContext=workload-name|reserved-identity"
+        - "flow:sourceContext=workload-name|reserved-identity;destinationContext=workload-name|reserved-identity"
+        - "icmp:sourceContext=workload-name|reserved-identity;destinationContext=workload-name|reserved-identity"
+      serviceMonitor:
+        enabled: false
+    relay:
+      enabled: true
+    ui:
+      enabled: true
+    tls:
+      auto:
+        enabled: true
+        method: cronJob
+  operator:
+    replicas: 1

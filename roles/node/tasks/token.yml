@@ -1,0 +1,12 @@
+---
+- name: Read node token from bootstrap host
+  ansible.builtin.slurp:
+    src: "{{ rke2_data_dir }}/server/node-token"
+  register: rke2_node_token_raw
+  delegate_to: "{{ rke2_bootstrap_host }}"
+  no_log: "{{ rke2_no_log }}"
+
+- name: Set rke2_token fact
+  ansible.builtin.set_fact:
+    rke2_token: "{{ rke2_node_token_raw.content | b64decode | trim }}"
+  no_log: "{{ rke2_no_log }}"

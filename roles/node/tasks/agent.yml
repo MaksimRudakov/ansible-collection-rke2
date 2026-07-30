@@ -1,0 +1,11 @@
+---
+- name: Enable and start rke2-agent
+  ansible.builtin.systemd_service:
+    name: rke2-agent
+    enabled: true
+    state: started
+
+- name: Wait for kubelet port
+  ansible.builtin.wait_for:
+    port: 10250
+    timeout: "{{ rke2_kubelet_wait_timeout }}"

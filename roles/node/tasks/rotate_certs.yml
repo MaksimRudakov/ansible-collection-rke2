@@ -1,0 +1,15 @@
+---
+# Removes kube-apiserver serving certificates; RKE2 regenerates them on
+# restart with the current tls-san from config.yaml
+- name: Determine rke2 service state for restart guard
+  ansible.builtin.include_tasks: service_state.yml
+  when: rke2_service_active is not defined
+
+- name: Remove kube-apiserver serving certificates
+  ansible.builtin.file:
+    path: "{{ rke2_data_dir }}/server/tls/{{ item }}"
+    state: absent
+  loop:
+    - serving-kube-apiserver.crt
+    - serving-kube-apiserver.key
+  notify: Restart rke2

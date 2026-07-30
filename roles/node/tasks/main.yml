@@ -1,0 +1,65 @@
+---
+- name: Validate rke2_role
+  ansible.builtin.assert:
+    that:
+      - rke2_role is defined
+      - rke2_role in ['server', 'agent']
+    fail_msg: "rke2_role must be 'server' or 'agent'"
+
+- name: Validate air-gapped configuration
+  ansible.builtin.assert:
+    that:
+      - rke2_mirror_base | length > 0
+    fail_msg: "rke2_mirror_base is required when rke2_airgap is true"
+  when: rke2_airgap | bool
+
+# Convenience for the collection playbooks: when the inventory follows the
+# rke2_servers/rke2_agents contract, joining nodes derive the registration
+# URL and fetch the token from the bootstrap host automatically
+- name: Derive rke2_server_url from the bootstrap host
+  ansible.builtin.set_fact:
+    rke2_server_url: "https://{{ hostvars[rke2_bootstrap_host].ansible_host | default(rke2_bootstrap_host) }}:9345"
+  when:
+    - not (rke2_first_server | default(false))
+    - rke2_server_url | length == 0
+    - rke2_bootstrap_host | length > 0
+
+- name: Fetch join token from the bootstrap host
+  ansible.builtin.include_tasks: token.yml
+  when:
+    - not (rke2_first_server | default(false))
+    - rke2_token | length == 0
+    - rke2_bootstrap_host | length > 0
+
+- name: Validate required variables for joining nodes
+  ansible.builtin.assert:
+    that:
+      - rke2_server_url | length > 0
+      - rke2_token | length > 0
+    fail_msg: >-
+      rke2_server_url and rke2_token are required for joining nodes.
+      Set them explicitly or put control-plane hosts into the
+      '{{ rke2_servers_group }}' inventory group for auto-derivation.
+  when: not (rke2_first_server | default(false))
+
+- name: Include install tasks
+  ansible.builtin.include_tasks: install.yml
+
+- name: Include config tasks
+  ansible.builtin.include_tasks: config.yml
+
+- name: Include first server tasks
+  ansible.builtin.include_tasks: first_server.yml
+  when:
+    - rke2_role == 'server'
+    - rke2_first_server | default(false)
+
+- name: Include additional server tasks
+  ansible.builtin.include_tasks: additional_server.yml
+  when:
+    - rke2_role == 'server'
+    - not (rke2_first_server | default(false))
+
+- name: Include agent tasks
+  ansible.builtin.include_tasks: agent.yml
+  when: rke2_role == 'agent'

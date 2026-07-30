@@ -1,0 +1,22 @@
+---
+# Air-gapped install-path test: no real RKE2 is installed. A mock mirror
+# serves a stub install.sh; the scenario verifies URL rewriting, installer
+# environment, script cleanup and the downgrade guard.
+driver:
+  name: docker
+platforms:
+  - name: rke2-airgap
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    command: /lib/systemd/systemd
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+provisioner:
+  name: ansible
+  env:
+    # collection root is <...>/collections/ansible_collections/maksimrudakov/rke2;
+    # keep the default user path so community.docker etc. stay resolvable
+    ANSIBLE_COLLECTIONS_PATH: "${MOLECULE_PROJECT_DIRECTORY}/../../..:${HOME}/.ansible/collections"
+verifier:
+  name: ansible
