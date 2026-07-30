@@ -40,6 +40,10 @@
   hosts: rke2_servers[0]
   become: true
   gather_facts: false
+  # informational only; skipped in molecule runs — right after agent join the
+  # young cluster is still converging (CNI rollout) and the API may flap.
+  # Readiness assertions live in molecule verify with proper waits
+  tags: [molecule-notest]
   vars:
     rke2_kubectl: /var/lib/rancher/rke2/bin/kubectl
     rke2_kubeconfig: /etc/rancher/rke2/rke2.yaml
@@ -49,6 +53,9 @@
         cmd: "{{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }} get nodes -o wide"
       register: rke2_cluster_state
       changed_when: false
+      retries: 10
+      delay: 15
+      until: rke2_cluster_state.rc == 0
 
     - name: Cluster state
       ansible.builtin.debug:

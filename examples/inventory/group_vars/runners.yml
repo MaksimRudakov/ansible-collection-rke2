@@ -1,6 +1,9 @@
 ---
+# NOTE: rke2_node_labels is passed to kubelet --node-labels; kubelet may not
+# self-assign labels in the node-role.kubernetes.io namespace. Use your own
+# label here and set node-role labels via kubectl after join if needed
 rke2_node_labels:
-  - "node-role.kubernetes.io/runner=true"
+  - "node-type=gitlab-runner"
 
 rke2_node_taints:
   - "dedicated=gitlab-runner:NoSchedule"
