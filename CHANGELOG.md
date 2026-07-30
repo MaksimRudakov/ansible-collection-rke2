@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-07-30
+
 ### Fixed
 - Examples and the `ha` molecule scenario used `node-role.kubernetes.io/runner=true` in `rke2_node_labels` — kubelet refuses to self-assign labels in that namespace (NodeRestriction) and crash-loops. Replaced with a plain label; the restriction is now documented for `rke2_node_labels`.
 
@@ -34,6 +36,7 @@ Initial collection release. Supersedes the standalone `maksimrudakov.rke2` role 
 - `tasks_from: config` populates the restart-guard fact itself, so config-only runs restart a running service correctly.
 - `config-server.yaml.j2` omits `server:` on the bootstrap node — `rke2_server_url` is safe to set cluster-wide.
 
-[Unreleased]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/releases/tag/v1.0.0
