@@ -11,8 +11,8 @@
         cmd: "{{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }} get nodes --no-headers"
       register: rke2_nodes
       changed_when: false
-      retries: 30
-      delay: 10
+      retries: 60
+      delay: 15
       until: >-
         rke2_nodes.stdout_lines | length == 2 and
         (rke2_nodes.stdout_lines | select('search', ' Ready') | list | length) == 2
@@ -43,8 +43,8 @@
     - name: Assert runner label and taint applied
       ansible.builtin.assert:
         that:
-          - "'\"node-role.kubernetes.io/runner\":\"true\"' in rke2_runner_node.stdout"
-          - "'gitlab-runner' in rke2_runner_node.stdout"
+          - "'\"node-type\":\"gitlab-runner\"' in rke2_runner_node.stdout"
+          - "'dedicated' in rke2_runner_node.stdout"
           - "'NoSchedule' in rke2_runner_node.stdout"
 
     - name: Assert the agent joined via the auto-derived registration URL

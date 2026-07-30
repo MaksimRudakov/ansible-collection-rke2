@@ -23,6 +23,9 @@
         cmd: "{{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }} get nodes -o wide"
       register: rke2_cluster_state
       changed_when: false
+      retries: 10
+      delay: 15
+      until: rke2_cluster_state.rc == 0
 
     - name: Cluster state before upgrade
       ansible.builtin.debug:
@@ -118,6 +121,9 @@
         cmd: "{{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }} get nodes -o wide"
       register: rke2_cluster_state
       changed_when: false
+      retries: 10
+      delay: 15
+      until: rke2_cluster_state.rc == 0
 
     - name: Cluster state after upgrade
       ansible.builtin.debug:

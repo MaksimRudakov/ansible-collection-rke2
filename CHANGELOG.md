@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Fixed
+- Examples and the `ha` molecule scenario used `node-role.kubernetes.io/runner=true` in `rke2_node_labels` — kubelet refuses to self-assign labels in that namespace (NodeRestriction) and crash-loops. Replaced with a plain label; the restriction is now documented for `rke2_node_labels`.
+
 ## [1.1.0] - 2026-07-30
 
 ### Added

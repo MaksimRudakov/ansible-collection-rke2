@@ -59,7 +59,7 @@ rke2_cluster:
           hosts:
             runner-01: { ansible_host: <RUNNER_01_IP> }
           vars:
-            rke2_node_labels: ["node-role.kubernetes.io/runner=true"]
+            rke2_node_labels: ["node-type=gitlab-runner"]
             rke2_node_taints: ["dedicated=gitlab-runner:NoSchedule"]
 ```
 

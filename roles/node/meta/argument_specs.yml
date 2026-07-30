@@ -139,7 +139,10 @@ argument_specs:
         type: list
         elements: str
         default: []
-        description: Node labels (key=value).
+        description: >-
+          Node labels (key=value), passed to kubelet --node-labels. Kubelet
+          may not self-assign node-role.kubernetes.io/* labels — set those
+          via kubectl after join.
       rke2_node_taints:
         type: list
         elements: str

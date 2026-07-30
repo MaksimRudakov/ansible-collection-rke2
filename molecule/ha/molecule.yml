@@ -2,8 +2,12 @@
 # Multi-node test: 1 server + 1 agent (dedicated runner node) deployed by
 # the real maksimrudakov.rke2.deploy playbook — covers bootstrap, automatic
 # token/URL derivation, agent join and runner labels/taints.
-# NOTE: 3-server etcd does not survive docker-on-WSL2 fsync latency (quorum
-# flaps under I/O load) — test additional-server joins on real hosts.
+#
+# HOST REQUIREMENTS: needs a machine with a fast disk. On docker-on-WSL2 the
+# apiserver flaps for minutes after agent join (etcd fsync latency): converge
+# and idempotence pass, but verify may time out waiting for Ready. 3-server
+# etcd does not survive there at all — test server joins on real hosts.
+# Not part of the CI matrix; run manually: molecule test -s ha
 # A user-defined docker network provides container-name DNS for the join URL.
 driver:
   name: docker
@@ -41,6 +45,14 @@ provisioner:
         rke2_api_wait_timeout: 300
         rke2_kubelet_wait_timeout: 300
         rke2_ready_timeout: 600
+        # minimal control plane: fewer pods → less churn on the shared disk
+        rke2_etcd_expose_metrics: false
+        rke2_disable_components:
+          - rke2-ingress-nginx
+          - rke2-metrics-server
+          - rke2-snapshot-controller
+          - rke2-snapshot-controller-crd
+          - rke2-snapshot-validation-webhook
         # slim Cilium (no Hubble relay/UI) to fit 4 nodes in RAM
         rke2_cilium_values:
           kubeProxyReplacement: true
@@ -49,8 +61,9 @@ provisioner:
           operator:
             replicas: 1
       runners:
+        # kubelet may not self-assign node-role.kubernetes.io/* labels
         rke2_node_labels:
-          - "node-role.kubernetes.io/runner=true"
+          - "node-type=gitlab-runner"
         rke2_node_taints:
           - "dedicated=gitlab-runner:NoSchedule"
 verifier:
