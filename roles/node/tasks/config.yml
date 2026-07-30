@@ -45,3 +45,15 @@
   when:
     - rke2_role == 'server'
     - rke2_cni == 'cilium'
+
+- name: Deploy custom manifests
+  ansible.builtin.copy:
+    content: "{{ item.content if item.content is string else item.content | to_nice_yaml(indent=2) }}"
+    dest: "/var/lib/rancher/rke2/server/manifests/{{ item.name }}.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ rke2_manifests }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: rke2_role == 'server'

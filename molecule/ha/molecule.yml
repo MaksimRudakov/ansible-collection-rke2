@@ -1,0 +1,57 @@
+---
+# Multi-node test: 1 server + 1 agent (dedicated runner node) deployed by
+# the real maksimrudakov.rke2.deploy playbook — covers bootstrap, automatic
+# token/URL derivation, agent join and runner labels/taints.
+# NOTE: 3-server etcd does not survive docker-on-WSL2 fsync latency (quorum
+# flaps under I/O load) — test additional-server joins on real hosts.
+# A user-defined docker network provides container-name DNS for the join URL.
+driver:
+  name: docker
+platforms:
+  - &node
+    name: rke2-server-1
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    command: /lib/systemd/systemd
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/lib/rancher
+    devices:
+      - /dev/kmsg
+    networks:
+      - name: rke2-ha
+    groups:
+      - rke2_servers
+  - <<: *node
+    name: rke2-agent-1
+    groups:
+      - rke2_agents
+      - runners
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_COLLECTIONS_PATH: "${MOLECULE_PROJECT_DIRECTORY}/../../..:${HOME}/.ansible/collections"
+  inventory:
+    group_vars:
+      all:
+        rke2_sysctl_params: []  # not writable inside a container
+        # constrained environment: give slow control-plane starts headroom
+        rke2_token_wait_timeout: 300
+        rke2_api_wait_timeout: 300
+        rke2_kubelet_wait_timeout: 300
+        rke2_ready_timeout: 600
+        # slim Cilium (no Hubble relay/UI) to fit 4 nodes in RAM
+        rke2_cilium_values:
+          kubeProxyReplacement: true
+          k8sServiceHost: "127.0.0.1"
+          k8sServicePort: "6443"
+          operator:
+            replicas: 1
+      runners:
+        rke2_node_labels:
+          - "node-role.kubernetes.io/runner=true"
+        rke2_node_taints:
+          - "dedicated=gitlab-runner:NoSchedule"
+verifier:
+  name: ansible

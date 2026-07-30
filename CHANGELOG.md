@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+- `rke2_manifests`: deploy arbitrary manifests to the server manifests directory (HelmChartConfig for any packaged component, HelmChart, plain resources) — the role is no longer Cilium-only for component tuning.
+- Molecule `ha` scenario: 1 server + 1 agent deployed by the real `deploy` playbook — covers bootstrap, automatic token/URL derivation, agent join and runner labels/taints. 3-server etcd does not survive docker fsync latency; test additional-server joins on real hosts.
+
+### Changed
+- `rke2_disable_kube_proxy` default is now derived: `true` only when `rke2_cni` is `cilium`. Non-Cilium CNIs keep kube-proxy instead of silently losing service routing.
+
 ## [1.0.0] - 2026-07-30
 
 Initial collection release. Supersedes the standalone `maksimrudakov.rke2` role (v1.1.0), which is included as `maksimrudakov.rke2.node`.

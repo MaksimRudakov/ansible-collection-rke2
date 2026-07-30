@@ -1,0 +1,4 @@
+---
+# The real deploy playbook is the system under test
+- name: Deploy the cluster
+  ansible.builtin.import_playbook: maksimrudakov.rke2.deploy
