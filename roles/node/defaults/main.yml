@@ -64,7 +64,8 @@ rke2_allow_downgrade: false
 # --- Node configuration -----------------------------------------------------
 
 rke2_cni: cilium
-rke2_disable_kube_proxy: true
+# kube-proxy replacement only makes sense with Cilium; other CNIs need kube-proxy
+rke2_disable_kube_proxy: "{{ rke2_cni == 'cilium' }}"
 rke2_disable_components:
   - rke2-ingress-nginx
 
@@ -98,6 +99,20 @@ rke2_etcd_arg: []
 # Arbitrary extra keys merged into config.yaml as-is (dict → YAML).
 # Covers any RKE2 option not exposed as a dedicated variable
 rke2_extra_config: {}
+
+# Arbitrary manifests deployed to the server manifests directory (servers
+# only): HelmChartConfig for any packaged component, HelmChart, plain
+# resources. content is a dict (rendered as YAML) or a raw string
+rke2_manifests: []
+# - name: rke2-canal-config
+#   content:
+#     apiVersion: helm.cattle.io/v1
+#     kind: HelmChartConfig
+#     metadata: {name: rke2-canal, namespace: kube-system}
+#     spec:
+#       valuesContent: |-
+#         flannel:
+#           backend: vxlan
 
 # --- Registries -------------------------------------------------------------
 

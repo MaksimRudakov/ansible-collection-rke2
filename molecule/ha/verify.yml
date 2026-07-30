@@ -1,0 +1,54 @@
+---
+- name: Verify
+  hosts: rke2-server-1
+  become: true
+  vars:
+    rke2_kubectl: /var/lib/rancher/rke2/bin/kubectl
+    rke2_kubeconfig: /etc/rancher/rke2/rke2.yaml
+  tasks:
+    - name: Wait until both nodes are Ready
+      ansible.builtin.command:
+        cmd: "{{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }} get nodes --no-headers"
+      register: rke2_nodes
+      changed_when: false
+      retries: 30
+      delay: 10
+      until: >-
+        rke2_nodes.stdout_lines | length == 2 and
+        (rke2_nodes.stdout_lines | select('search', ' Ready') | list | length) == 2
+
+    - name: Count control-plane nodes
+      ansible.builtin.command:
+        cmd: >-
+          {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}
+          get nodes -l node-role.kubernetes.io/control-plane --no-headers
+      register: rke2_cp_nodes
+      changed_when: false
+
+    - name: Assert exactly 1 control-plane node and 1 agent
+      ansible.builtin.assert:
+        that:
+          - rke2_cp_nodes.stdout_lines | length == 1
+          - rke2_nodes.stdout_lines | length == 2
+
+    - name: Get runner node labels and taints
+      ansible.builtin.command:
+        cmd: >-
+          {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}
+          get node rke2-agent-1
+          -o jsonpath={.metadata.labels}{.spec.taints}
+      register: rke2_runner_node
+      changed_when: false
+
+    - name: Assert runner label and taint applied
+      ansible.builtin.assert:
+        that:
+          - "'\"node-role.kubernetes.io/runner\":\"true\"' in rke2_runner_node.stdout"
+          - "'gitlab-runner' in rke2_runner_node.stdout"
+          - "'NoSchedule' in rke2_runner_node.stdout"
+
+    - name: Assert the agent joined via the auto-derived registration URL
+      ansible.builtin.command:
+        cmd: grep -E "^server. https://rke2-server-1:9345" /etc/rancher/rke2/config.yaml
+      delegate_to: rke2-agent-1
+      changed_when: false

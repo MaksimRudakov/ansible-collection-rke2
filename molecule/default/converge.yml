@@ -7,5 +7,15 @@
     rke2_first_server: true
     rke2_no_log: false
     rke2_sysctl_params: []  # not writable inside a container
+    rke2_manifests:
+      - name: molecule-test-cm
+        content:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: molecule-test
+            namespace: kube-system
+          data:
+            source: rke2-manifests
   roles:
     - role: maksimrudakov.rke2.node

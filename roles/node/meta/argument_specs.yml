@@ -102,8 +102,9 @@ argument_specs:
         description: CNI plugin. Cilium HelmChartConfig is deployed only when set to cilium.
       rke2_disable_kube_proxy:
         type: bool
-        default: true
-        description: Disable kube-proxy (Cilium kube-proxy replacement).
+        description: >-
+          Disable kube-proxy. Default — true only when rke2_cni is cilium
+          (kube-proxy replacement); other CNIs keep kube-proxy.
       rke2_disable_components:
         type: list
         elements: str
@@ -171,6 +172,14 @@ argument_specs:
         type: dict
         default: {}
         description: Arbitrary extra keys merged into config.yaml as-is.
+      rke2_manifests:
+        type: list
+        elements: dict
+        default: []
+        description: >-
+          Manifests deployed to the server manifests directory (servers only).
+          Items are {name, content}; content is a dict rendered as YAML or a
+          raw string.
       rke2_registry_mirrors:
         type: list
         elements: dict

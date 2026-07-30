@@ -83,7 +83,25 @@ ansible-playbook maksimrudakov.rke2.reconfig -i inventory/prod/
 ansible-playbook maksimrudakov.rke2.rotate_certs -i inventory/prod/
 ```
 
-Role variables: see [`roles/node/meta/argument_specs.yml`](roles/node/meta/argument_specs.yml). Key ones: `rke2_version`, `rke2_airgap` + `rke2_mirror_base`, `rke2_registry_mirrors` / `rke2_registry_configs`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_allow_downgrade`.
+Role variables: see [`roles/node/meta/argument_specs.yml`](roles/node/meta/argument_specs.yml). Key ones: `rke2_version`, `rke2_airgap` + `rke2_mirror_base`, `rke2_registry_mirrors` / `rke2_registry_configs`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests`, `rke2_allow_downgrade`.
+
+### Beyond Cilium
+
+Cilium is the tuned default, not a requirement. Any CNI works: `rke2_cni: canal` (or `calico`, `none`, `multus,cilium`) — `rke2_disable_kube_proxy` automatically stays `false` for non-Cilium CNIs. Anything RKE2's `config.yaml` supports goes into `rke2_extra_config` (rendered as-is), and `rke2_manifests` drops arbitrary manifests into the server manifests directory — `HelmChartConfig` for any packaged component, your own `HelmChart`, plain resources:
+
+```yaml
+rke2_cni: canal
+rke2_manifests:
+  - name: rke2-canal-config
+    content:
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChartConfig
+      metadata: {name: rke2-canal, namespace: kube-system}
+      spec:
+        valuesContent: |-
+          flannel:
+            backend: vxlan
+```
 
 ## Day-2 helpers (role entry points)
 
