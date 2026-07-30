@@ -3,6 +3,7 @@
 [![CI](https://github.com/MaksimRudakov/ansible-collection-rke2/actions/workflows/ci.yaml/badge.svg)](https://github.com/MaksimRudakov/ansible-collection-rke2/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/v/release/MaksimRudakov/ansible-collection-rke2?sort=semver)](https://github.com/MaksimRudakov/ansible-collection-rke2/releases)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Ansible Galaxy](https://img.shields.io/ansible/collection/v/maksimrudakov/rke2?label=galaxy)](https://galaxy.ansible.com/ui/repo/published/maksimrudakov/rke2/)
 
 Deploys and operates [RKE2](https://docs.rke2.io/) Kubernetes clusters with [Cilium](https://cilium.io/) CNI. Works both **online** and **fully air-gapped** (through an internal mirror such as a Nexus raw proxy).
 
@@ -24,6 +25,12 @@ The collection ships a node-level role plus ready-to-run playbooks — the whole
 - Ubuntu 22.04/24.04 or EL 8/9 targets with systemd
 
 ## Installation
+
+```bash
+ansible-galaxy collection install maksimrudakov.rke2
+```
+
+Or straight from git:
 
 ```bash
 ansible-galaxy collection install git+https://github.com/MaksimRudakov/ansible-collection-rke2.git,v1.0.0
