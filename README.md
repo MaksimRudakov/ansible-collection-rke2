@@ -13,11 +13,12 @@ The collection ships a node-level role plus ready-to-run playbooks — the whole
 
 | Component | FQCN | Purpose |
 |-----------|------|---------|
-| role | `maksimrudakov.rke2.node` | Converge one node: install, config, join. Entry points for day-2 helpers (`token`, `cordon`, `drain`, `uncordon`, `wait_ready`, `rotate_certs`, `config`) |
+| role | `maksimrudakov.rke2.node` | Converge one node: install, config, join. Entry points for day-2 helpers (`token`, `cordon`, `drain`, `uncordon`, `stop`, `start`, `node_roles`, `wait_ready`, `rotate_certs`, `config`) |
 | playbook | `maksimrudakov.rke2.deploy` | Full cluster bootstrap: first server → additional servers (`serial: 1`) → agents |
 | playbook | `maksimrudakov.rke2.upgrade` | Rolling upgrade: cordon → drain → converge → wait Ready → uncordon |
 | playbook | `maksimrudakov.rke2.reconfig` | Rolling config reapply (kubelet args, labels, registries) without drain |
 | playbook | `maksimrudakov.rke2.rotate_certs` | Rotate kube-apiserver serving certs after `rke2_tls_san` change |
+| playbook | `maksimrudakov.rke2.remove_node` | Remove node(s): cordon → drain → delete Node → `rke2-uninstall.sh`. Explicit target via `-e rke2_remove_hosts=<pattern>` |
 
 ## Requirements
 
@@ -83,7 +84,7 @@ ansible-playbook maksimrudakov.rke2.reconfig -i inventory/prod/
 ansible-playbook maksimrudakov.rke2.rotate_certs -i inventory/prod/
 ```
 
-Role variables: see [`roles/node/meta/argument_specs.yml`](roles/node/meta/argument_specs.yml). Key ones: `rke2_version`, `rke2_airgap` + `rke2_mirror_base`, `rke2_registry_mirrors` / `rke2_registry_configs`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests`, `rke2_allow_downgrade`.
+Role variables: see [`roles/node/meta/argument_specs.yml`](roles/node/meta/argument_specs.yml). Key ones: `rke2_version`, `rke2_airgap` + `rke2_mirror_base`, `rke2_registry_mirrors` / `rke2_registry_configs`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests`, `rke2_node_roles`, `rke2_etcd_snapshot_schedule_cron` / `rke2_etcd_snapshot_retention`, `rke2_cis_profile`, `rke2_allow_downgrade`.
 
 ### Beyond Cilium
 
@@ -111,7 +112,7 @@ For custom playbooks, the role exposes reusable task files:
 - name: Drain node before maintenance
   ansible.builtin.include_role:
     name: maksimrudakov.rke2.node
-    tasks_from: drain   # also: token, cordon, uncordon, wait_ready, rotate_certs, config
+    tasks_from: drain   # also: token, cordon, uncordon, stop, start, node_roles, delete_node, uninstall, wait_ready, rotate_certs, config
 ```
 
 Delegation and paths are variables: `rke2_kubectl_delegate` (which host runs kubectl, default — first server), `rke2_node_name`, `rke2_data_dir`, `rke2_kubectl`, `rke2_kubeconfig`, `rke2_drain_timeout`, `rke2_ready_timeout`.
@@ -130,6 +131,11 @@ export ANSIBLE_COLLECTIONS_PATH=<path-to>/collections
 molecule test -s airgap    # fast: mock mirror, URL rewrites, downgrade guard
 molecule test              # full: single-node RKE2 bootstrap in a privileged container
 ```
+
+Beyond molecule, every playbook and feature is verified end-to-end against real
+HA clusters (RKE2 v1.34/v1.35, Ubuntu 24.04, Cilium and Canal, CIS mode, rolling
+patch and minor upgrades, node add/remove) — the full matrix with versions is in
+[`TESTING.md`](TESTING.md).
 
 ## License
 

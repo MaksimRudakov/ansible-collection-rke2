@@ -1,0 +1,14 @@
+---
+# Stop the rke2 service on the node. By RKE2 design a service stop leaves
+# running pods and containers alive; set rke2_stop_killall to also terminate
+# them and clean up network interfaces (rke2-killall.sh)
+- name: Stop rke2 service
+  ansible.builtin.systemd_service:
+    name: "rke2-{{ rke2_role }}"
+    state: stopped
+
+- name: Kill remaining rke2 processes and containers
+  ansible.builtin.command:
+    cmd: rke2-killall.sh
+  changed_when: true
+  when: rke2_stop_killall | bool

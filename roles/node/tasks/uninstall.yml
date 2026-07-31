@@ -1,0 +1,24 @@
+---
+# Wipe RKE2 from the host: the bundled rke2-uninstall.sh stops services,
+# kills remaining processes and containers (rke2-killall.sh) and removes
+# binaries, data and config. The Node object is NOT touched here — drain and
+# delete it first (see the remove_node playbook)
+- name: Locate rke2-uninstall.sh
+  ansible.builtin.shell:
+    cmd: command -v rke2-uninstall.sh || true
+  register: rke2_uninstall_script
+  changed_when: false
+
+- name: Run rke2-uninstall.sh
+  ansible.builtin.command:
+    cmd: "{{ rke2_uninstall_script.stdout | trim }}"
+  changed_when: true
+  when: rke2_uninstall_script.stdout | trim | length > 0
+
+- name: Remove leftover RKE2 directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/rancher/rke2
+    - "{{ rke2_data_dir }}"

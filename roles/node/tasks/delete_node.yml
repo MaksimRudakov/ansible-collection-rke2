@@ -1,0 +1,12 @@
+---
+# Delete the Node object from the cluster (kubectl over delegation). For
+# server nodes RKE2's etcd controller removes the etcd member automatically
+# once the Node object is gone
+- name: Delete node from cluster
+  ansible.builtin.command:
+    cmd: >-
+      {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}
+      delete node {{ rke2_node_name }} --ignore-not-found
+  delegate_to: "{{ rke2_kubectl_delegate }}"
+  register: rke2_delete_node_result
+  changed_when: "'deleted' in rke2_delete_node_result.stdout"

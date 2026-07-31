@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-31
+
+### Fixed
+- `rke2_cis_profile` was unusable: RKE2 in CIS mode requires the `etcd` system user and the shipped CIS sysctl profile, so `rke2-server` failed to start with `missing required: user: unknown user etcd`. When the profile is set, the role now creates the etcd user/group on servers and applies `rke2-cis-sysctl.conf` (tar and rpm layouts) before the service starts.
+- Standalone `tasks_from: config` (the `reconfig` playbook path) rendered agent configs with an empty `server:` / `token:` — the join-parameter derivation lived only in `main.yml`, so the rke2-agent service failed to restart with "--server is required" (additional servers silently lost the `server:`/`token:` lines instead). Derivation is extracted to `join_params.yml` and included from both `main.yml` and `config.yml`.
+
+### Added
+- `maksimrudakov.rke2.remove_node` playbook with two explicit paths: graceful (`-e rke2_remove_hosts=<pattern>`: cordon → drain → delete the Node object → wipe the host with `rke2-uninstall.sh`; refuses to remove the kubectl delegate) and dead-host (`-e rke2_remove_dead_nodes=<name,...>`: delete Node objects from a live server when the VM is already gone — works even with a broken dynamic inventory via an inline `-i '<SERVER_IP>,'`). Building blocks available as role entry points `delete_node` and `uninstall`.
+- etcd snapshot settings (servers only): `rke2_etcd_snapshot_schedule_cron`, `rke2_etcd_snapshot_retention`, `rke2_etcd_snapshot_dir`. Empty values keep RKE2 defaults; S3 upload via `rke2_extra_config`.
+- `rke2_node_roles`: node roles for the ROLES column (`node-role.kubernetes.io/<role>` labels), e.g. `["worker"]`. Kubelet may not self-assign these (NodeRestriction), so the role reconciles them with kubectl over delegation after the node joins — missing roles are added, roles absent from the list are removed (RKE2-managed `control-plane`/`etcd`/`master` are never touched); also available standalone as the `node_roles` entry point.
+- Role entry points `stop` / `start`: stop or start the `rke2-server` / `rke2-agent` service on a node. `rke2_stop_killall: true` additionally runs `rke2-killall.sh` after the stop — a plain service stop leaves pods and containers running by RKE2 design.
+
 ## [1.1.1] - 2026-07-30
 
 ### Fixed

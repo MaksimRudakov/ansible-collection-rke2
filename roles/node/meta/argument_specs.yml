@@ -119,6 +119,21 @@ argument_specs:
         type: bool
         default: true
         description: Expose etcd metrics.
+      rke2_etcd_snapshot_schedule_cron:
+        type: str
+        default: ""
+        description: etcd snapshot cron schedule (servers only). Empty — RKE2 default "0 */12 * * *".
+      rke2_etcd_snapshot_retention:
+        type: str
+        default: ""
+        description: Number of etcd snapshots to retain (servers only). Empty — RKE2 default 5.
+      rke2_etcd_snapshot_dir:
+        type: str
+        default: ""
+        description: >-
+          etcd snapshot directory (servers only). Empty — RKE2 default
+          <data-dir>/server/db/snapshots. S3 upload — via rke2_extra_config
+          (etcd-s3, etcd-s3-endpoint, etcd-s3-bucket, ...).
       rke2_write_kubeconfig_mode:
         type: str
         default: "0600"
@@ -126,7 +141,11 @@ argument_specs:
       rke2_cis_profile:
         type: str
         default: ""
-        description: CIS hardening profile (e.g. cis). Empty disables it.
+        description: >-
+          CIS hardening profile (e.g. cis). Empty disables it. When set, the
+          role also provisions the prerequisites required by RKE2 CIS mode:
+          the etcd system user/group on servers and the shipped
+          rke2-cis-sysctl.conf kernel parameters.
       rke2_cluster_cidr:
         type: str
         default: ""
@@ -141,13 +160,23 @@ argument_specs:
         default: []
         description: >-
           Node labels (key=value), passed to kubelet --node-labels. Kubelet
-          may not self-assign node-role.kubernetes.io/* labels — set those
-          via kubectl after join.
+          may not self-assign node-role.kubernetes.io/* labels — use
+          rke2_node_roles for those.
       rke2_node_taints:
         type: list
         elements: str
         default: []
         description: Node taints (key=value:Effect).
+      rke2_node_roles:
+        type: list
+        elements: str
+        default: []
+        description: >-
+          Node roles for the ROLES column (node-role.kubernetes.io/<role>
+          labels), e.g. [worker]. Kubelet may not self-assign these
+          (NodeRestriction) — reconciled with kubectl over delegation after
+          the node joins; roles absent from the list are removed, except the
+          RKE2-managed control-plane/etcd/master.
       rke2_kubelet_arg:
         type: list
         elements: str
@@ -200,6 +229,13 @@ argument_specs:
       rke2_cilium_values:
         type: dict
         description: Helm values for the rke2-cilium HelmChartConfig.
+      rke2_stop_killall:
+        type: bool
+        default: false
+        description: >-
+          tasks_from stop only. Also run rke2-killall.sh after stopping the
+          service: a plain service stop leaves pods and containers running
+          by RKE2 design.
       rke2_no_log:
         type: bool
         default: true

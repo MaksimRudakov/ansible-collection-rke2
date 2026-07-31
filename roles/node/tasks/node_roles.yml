@@ -1,0 +1,40 @@
+---
+# kubelet may not self-assign node-role.kubernetes.io/* labels
+# (NodeRestriction), so they cannot go through rke2_node_labels — reconcile
+# them with kubectl after the node has joined: missing roles are added, roles
+# absent from rke2_node_roles are removed. RKE2-managed roles (control-plane,
+# etcd, master) are never touched. Retries cover the gap between kubelet
+# start and Node object registration
+- name: Get current node labels
+  ansible.builtin.command:
+    cmd: >-
+      {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}
+      get node {{ rke2_node_name }} -o jsonpath={.metadata.labels}
+  delegate_to: "{{ rke2_kubectl_delegate }}"
+  register: rke2_node_labels_raw
+  changed_when: false
+  retries: 10
+  delay: 15
+  until: rke2_node_labels_raw.rc == 0
+
+- name: Reconcile node-role labels
+  vars:
+    rke2_node_roles_current: >-
+      {{ rke2_node_labels_raw.stdout | default('{}', true) | from_json
+         | dict2items | map(attribute='key')
+         | select('match', '^node-role\.kubernetes\.io/')
+         | map('regex_replace', '^node-role\.kubernetes\.io/', '') | list }}
+    rke2_node_roles_add: "{{ rke2_node_roles | difference(rke2_node_roles_current) }}"
+    rke2_node_roles_remove: >-
+      {{ rke2_node_roles_current | difference(rke2_node_roles)
+         | difference(['control-plane', 'etcd', 'master']) }}
+  ansible.builtin.command:
+    cmd: >-
+      {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}
+      label node {{ rke2_node_name }}
+      {% for role in rke2_node_roles_add %}node-role.kubernetes.io/{{ role }}= {% endfor %}
+      {% for role in rke2_node_roles_remove %}node-role.kubernetes.io/{{ role }}- {% endfor %}
+      --overwrite
+  delegate_to: "{{ rke2_kubectl_delegate }}"
+  changed_when: true
+  when: rke2_node_roles_add | length > 0 or rke2_node_roles_remove | length > 0

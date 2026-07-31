@@ -21,6 +21,15 @@ disable:
 {% endif %}
 disable-kube-proxy: {{ rke2_disable_kube_proxy | lower }}
 etcd-expose-metrics: {{ rke2_etcd_expose_metrics | lower }}
+{% if rke2_etcd_snapshot_schedule_cron | length > 0 %}
+etcd-snapshot-schedule-cron: "{{ rke2_etcd_snapshot_schedule_cron }}"
+{% endif %}
+{% if rke2_etcd_snapshot_retention | string | length > 0 %}
+etcd-snapshot-retention: {{ rke2_etcd_snapshot_retention }}
+{% endif %}
+{% if rke2_etcd_snapshot_dir | length > 0 %}
+etcd-snapshot-dir: {{ rke2_etcd_snapshot_dir }}
+{% endif %}
 write-kubeconfig-mode: "{{ rke2_write_kubeconfig_mode }}"
 {% if rke2_cis_profile | length > 0 %}
 profile: {{ rke2_cis_profile }}

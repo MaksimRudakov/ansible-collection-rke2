@@ -28,6 +28,8 @@ molecule test               # full: real RKE2 bootstrap in a privileged containe
 
 The `default` scenario runs real RKE2 in docker and needs the quirks already encoded in the scenario: `/var/lib/rancher` volume, `mount --make-rshared /`, curl in prepare. Don't remove them.
 
+What has been verified end-to-end on real clusters (and on which versions) is tracked in [TESTING.md](./TESTING.md).
+
 ## Code style
 
 - 2 spaces, YAML without redundant quotes, FQCN module names.
