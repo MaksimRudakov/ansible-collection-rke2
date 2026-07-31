@@ -5,6 +5,12 @@
   ansible.builtin.include_tasks: service_state.yml
   when: rke2_service_active is not defined
 
+# Standalone includes also miss the join-parameter derivation from main.yml;
+# without it agent configs would render with an empty server:/token:
+- name: Derive join parameters
+  ansible.builtin.include_tasks: join_params.yml
+  when: rke2_server_url | length == 0 or rke2_token | length == 0
+
 - name: Deploy registries.yaml
   ansible.builtin.template:
     src: registries.yaml.j2

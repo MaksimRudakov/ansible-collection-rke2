@@ -17,6 +17,10 @@ Besides `main`, the role exposes task files for custom day-2 playbooks via `incl
 | `config` | Re-render config files, restart via handler if changed |
 | `token` | Fetch the join token from the bootstrap host |
 | `cordon` / `drain` / `uncordon` | Node lifecycle around maintenance |
+| `stop` / `start` | Stop/start the rke2 service; `rke2_stop_killall: true` also runs `rke2-killall.sh` (a plain service stop leaves pods running by RKE2 design) |
+| `node_roles` | Apply `node-role.kubernetes.io/<role>` labels from `rke2_node_roles` via kubectl (kubelet may not self-assign them) |
+| `delete_node` | Delete the Node object via kubectl (etcd member removed automatically for servers) |
+| `uninstall` | Wipe RKE2 from the host (`rke2-uninstall.sh` + leftover dirs); drain/delete the Node first |
 | `wait_ready` | Wait for the Node object to become Ready |
 | `rotate_certs` | Remove kube-apiserver serving certs for regeneration |
 

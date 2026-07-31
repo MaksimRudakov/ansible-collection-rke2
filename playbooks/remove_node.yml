@@ -1,0 +1,88 @@
+---
+# Remove node(s) from the cluster. Two paths, both no-ops unless their
+# variable is passed explicitly:
+#
+# 1. Node is alive (graceful): cordon → drain → delete the Node object
+#    (for servers the etcd member is removed automatically) → wipe RKE2
+#    from the host with rke2-uninstall.sh.
+#      ansible-playbook maksimrudakov.rke2.remove_node -i inventory/<env>/ \
+#        -e rke2_remove_hosts=worker-03
+#    rke2_remove_hosts accepts any Ansible host pattern. When removing the
+#    bootstrap server (the default kubectl delegate), set
+#    rke2_kubectl_delegate to another server explicitly.
+#
+# 2. Host is already gone (dead VM) — only the Node object is deleted, from
+#    a live server; stale etcd members of dead servers are cleaned up by the
+#    RKE2 etcd controller (works while quorum is alive; quorum loss is
+#    disaster recovery — rke2 server --cluster-reset — not this playbook):
+#      ansible-playbook maksimrudakov.rke2.remove_node -i inventory/<env>/ \
+#        -e rke2_remove_dead_nodes=worker-04,worker-05
+#    Does not depend on the dead host being resolvable in inventory. If the
+#    dynamic inventory itself is broken, point the play at any live server
+#    with an inline inventory:
+#      ansible-playbook maksimrudakov.rke2.remove_node -i '<SERVER_IP>,' \
+#        -e rke2_delegate_hosts=all -e ansible_user=<USER> \
+#        -e rke2_remove_dead_nodes=worker-04
+#    (inline '<IP>,' needs the host_list inventory plugin — if ansible.cfg
+#    restricts enable_plugins, add ANSIBLE_INVENTORY_ENABLED=host_list)
+
+- name: Remove RKE2 nodes from the cluster
+  # sentinel matches no hosts: without an explicit -e rke2_remove_hosts the
+  # play is a no-op instead of touching the whole inventory
+  hosts: "{{ rke2_remove_hosts | default('rke2_remove_hosts_is_not_set') }}"
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    rke2_role: >-
+      {{ 'server' if inventory_hostname in groups.get('rke2_servers', [])
+         else 'agent' }}
+  tasks:
+    - name: Refuse to remove the kubectl delegate itself
+      ansible.builtin.assert:
+        that: (rke2_kubectl_delegate | default(rke2_default_delegate, true)) != inventory_hostname
+        fail_msg: >-
+          {{ inventory_hostname }} is the kubectl delegate. Set
+          rke2_kubectl_delegate to another (surviving) server to remove
+          this node.
+      vars:
+        rke2_default_delegate: "{{ groups.get('rke2_servers', []) | first | default('') }}"
+      when: inventory_hostname in groups.get('rke2_servers', [])
+
+    - name: Cordon node
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: cordon
+
+    - name: Drain node
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: drain
+
+    - name: Delete node from cluster
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: delete_node
+
+    - name: Uninstall RKE2 from the host
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: uninstall
+
+- name: Remove dead nodes from the cluster (host already gone)
+  # runs on ONE live server; override rke2_delegate_hosts (e.g. 'all' with an
+  # inline inventory '<SERVER_IP>,') when the dynamic inventory is broken
+  hosts: "{{ rke2_delegate_hosts | default('rke2_servers[0]') }}"
+  become: true
+  vars:
+    rke2_role: server
+  tasks:
+    - name: Delete dead nodes from the cluster
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: delete_node
+      vars:
+        rke2_node_name: "{{ item }}"
+        rke2_kubectl_delegate: "{{ inventory_hostname }}"
+      loop: "{{ rke2_remove_dead_nodes | default('') | split(',') | map('trim') | select | list }}"
+      when: rke2_remove_dead_nodes | default('') | length > 0

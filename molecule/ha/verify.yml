@@ -52,3 +52,39 @@
         cmd: grep -E "^server. https://rke2-server-1:9345" /etc/rancher/rke2/config.yaml
       delegate_to: rke2-agent-1
       changed_when: false
+
+# Regression for the join_params bug (fixed in 1.2.0): standalone
+# `tasks_from: config` used to render agent configs with an empty
+# server:/token: because the derivation lived only in main.yml
+- name: Regression — standalone config include keeps join parameters
+  hosts: rke2-agent-1
+  become: true
+  vars:
+    rke2_role: agent
+  tasks:
+    - name: Re-render config standalone (reconfig path)
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: config
+
+    - name: Read rendered config.yaml
+      ansible.builtin.slurp:
+        src: /etc/rancher/rke2/config.yaml
+      register: rke2_verify_config
+      no_log: true
+
+    - name: Assert server and token survived the standalone re-render
+      ansible.builtin.assert:
+        that:
+          - "'server: https://' in rke2_verify_config.content | b64decode"
+          - "'token: ' in rke2_verify_config.content | b64decode"
+        fail_msg: >-
+          Standalone tasks_from=config rendered an incomplete agent config —
+          join_params derivation regressed.
+
+    - name: Check rke2-agent service state
+      ansible.builtin.service_facts:
+
+    - name: Assert rke2-agent stayed active
+      ansible.builtin.assert:
+        that: ansible_facts.services['rke2-agent.service'].state == 'running'

@@ -71,6 +71,14 @@ rke2_disable_components:
 
 rke2_tls_san: []
 rke2_etcd_expose_metrics: true
+
+# --- etcd snapshots (servers only) --------------------------------------------
+# Empty = RKE2 defaults: cron "0 */12 * * *", retention 5,
+# dir <data-dir>/server/db/snapshots. S3 upload — via rke2_extra_config
+# (etcd-s3, etcd-s3-endpoint, etcd-s3-bucket, ...)
+rke2_etcd_snapshot_schedule_cron: ""
+rke2_etcd_snapshot_retention: ""
+rke2_etcd_snapshot_dir: ""
 rke2_write_kubeconfig_mode: "0600"
 
 # CIS hardening profile, e.g. "cis". Empty = disabled
@@ -82,6 +90,11 @@ rke2_service_cidr: ""
 
 rke2_node_labels: []
 rke2_node_taints: []
+
+# Node roles shown in the ROLES column (node-role.kubernetes.io/<role> labels),
+# e.g. ["worker"]. Kubelet may not self-assign these (NodeRestriction), so the
+# role applies them with kubectl over delegation after the node joins
+rke2_node_roles: []
 
 rke2_kubelet_arg:
   - "image-gc-high-threshold=85"
@@ -137,6 +150,10 @@ rke2_sysctl_params:
     value: "512"
   - name: fs.file-max
     value: "1000000"
+
+# tasks_from: stop — also run rke2-killall.sh after the service stop: RKE2
+# leaves pods and containers running on a plain service stop by design
+rke2_stop_killall: false
 
 # --- Misc -------------------------------------------------------------------
 

@@ -1,0 +1,50 @@
+---
+# RKE2 CIS mode prerequisites (docs.rke2.io hardening guide): the etcd
+# system user must exist on servers and the CIS sysctl profile shipped with
+# RKE2 must be applied — otherwise rke2-server refuses to start
+- name: Create etcd group (CIS)
+  ansible.builtin.group:
+    name: etcd
+    system: true
+  when: rke2_role == 'server'
+
+- name: Create etcd user (CIS)
+  ansible.builtin.user:
+    name: etcd
+    group: etcd
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    comment: etcd user
+  when: rke2_role == 'server'
+
+- name: Locate shipped CIS sysctl profile
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/local/share/rke2/rke2-cis-sysctl.conf  # tar install
+    - /usr/share/rke2/rke2-cis-sysctl.conf        # rpm install
+  register: rke2_cis_sysctl_stat
+
+- name: Verify the CIS sysctl profile was found
+  ansible.builtin.assert:
+    that: rke2_cis_sysctl_stat.results | selectattr('stat.exists') | list | length > 0
+    fail_msg: rke2-cis-sysctl.conf not found — is RKE2 installed?
+
+- name: Apply CIS sysctl profile
+  ansible.builtin.copy:
+    src: "{{ (rke2_cis_sysctl_stat.results | selectattr('stat.exists') | first).stat.path }}"
+    dest: /etc/sysctl.d/60-rke2-cis.conf
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  register: rke2_cis_sysctl_copy
+
+# not a handler: the parameters must be live BEFORE rke2 starts later in
+# this same run — a handler would fire only at the end of the play
+- name: Reload sysctl (CIS)  # noqa: no-handler
+  ansible.builtin.systemd_service:
+    name: systemd-sysctl
+    state: restarted
+  when: rke2_cis_sysctl_copy is changed
