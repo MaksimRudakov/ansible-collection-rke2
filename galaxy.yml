@@ -1,14 +1,15 @@
 ---
 namespace: maksimrudakov
 name: rke2
-version: 1.3.0
+version: 1.4.0
 readme: README.md
 authors:
   - Maxim Rudakov
 description: >-
   RKE2 Kubernetes cluster deployment and day-2 operations: node role plus
   ready-to-run playbooks (deploy, rolling upgrade, reconfig, cert rotation).
-  Online and air-gapped installation, Cilium CNI.
+  Online and air-gapped installation, Cilium CNI, Rancher Fleet standalone
+  GitOps.
 license:
   - Apache-2.0
 tags:
@@ -20,6 +21,8 @@ tags:
   - cilium
   - airgap
   - cluster
+  - fleet
+  - gitops
 dependencies:
   ansible.posix: ">=1.5.0"
 repository: https://github.com/MaksimRudakov/ansible-collection-rke2

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-03
+
+### Added
+- `maksimrudakov.rke2.fleet` role and playbook: Rancher Fleet standalone (no Rancher Manager) — installs the `fleet-crd`/`fleet` charts from charts.rancher.io via node-local helm/kubectl, waits for the fleet-controller rollout and optionally registers a `GitRepo` with a basic-auth secret (empty token — public repo, no secret). Helm binary is installed automatically with checksum verification and amd64/arm64 detection (`fleet_helm_install: false` to skip, `fleet_helm_url` for air-gapped mirrors). Tags `install` / `gitrepo` allow token rotation and path updates without touching the installation. Re-runs with a pinned `fleet_version` are idempotent (the deployed chart is compared and the upgrade is skipped; `fleet_force_upgrade` pushes values changes); manifests with credentials go through mkstemp'ed files, never predictable `/tmp` paths. Covered by the `default` molecule scenario (install + idempotence guard + controller/agent verify); chart upgrades verified end-to-end (see TESTING.md).
+
 ## [1.3.0] - 2026-08-03
 
 ### Added

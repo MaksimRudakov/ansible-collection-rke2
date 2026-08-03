@@ -1,0 +1,130 @@
+---
+argument_specs:
+  main:
+    short_description: Install Rancher Fleet standalone and optionally register a GitRepo
+    description:
+      - Installs the fleet-crd and fleet helm charts from charts.rancher.io on
+        the cluster reachable through the node-local kubeconfig, waits for the
+        fleet-controller rollout and optionally applies a GitRepo resource with
+        a basic-auth secret. Helm/kubectl run on the target node (a server) —
+        defaults point at the RKE2 paths.
+    options:
+      fleet_version:
+        type: str
+        default: ""
+        description: >-
+          Fleet chart version as published on charts.rancher.io
+          (e.g. 110.0.0+up0.16.0). Empty installs the latest available; only
+          a pinned version makes re-runs idempotent (the deployed chart is
+          compared and the upgrade is skipped).
+      fleet_force_upgrade:
+        type: bool
+        default: false
+        description: >-
+          Force helm upgrade even when the pinned chart version is already
+          deployed — required to apply chart values changes.
+      fleet_namespace:
+        type: str
+        default: cattle-fleet-system
+        description: Namespace for the Fleet installation.
+      fleet_chart_repo_name:
+        type: str
+        default: fleet
+        description: Local name for the helm repository.
+      fleet_chart_repo_url:
+        type: str
+        default: https://charts.rancher.io
+        description: Helm repository URL.
+      fleet_kubeconfig:
+        type: str
+        default: /etc/rancher/rke2/rke2.yaml
+        description: Path to the cluster kubeconfig on the target node.
+      fleet_kubectl_bin:
+        type: str
+        default: /var/lib/rancher/rke2/bin/kubectl
+        description: Path to the kubectl binary on the target node.
+      fleet_helm_install:
+        type: bool
+        default: true
+        description: Install the helm binary. Disable if helm is already present.
+      fleet_helm_version:
+        type: str
+        default: "3.17.3"
+        description: Helm version to install.
+      fleet_helm_bin:
+        type: str
+        default: /usr/local/bin/helm
+        description: Path to the helm binary.
+      fleet_helm_arch:
+        type: str
+        description: Helm archive architecture. Default — derived from ansible_architecture (amd64/arm64).
+      fleet_helm_url:
+        type: str
+        description: >-
+          Helm archive URL. Default — get.helm.sh; override for air-gapped
+          installs together with fleet_helm_checksum.
+      fleet_helm_checksum:
+        type: str
+        description: >-
+          get_url checksum spec for the helm archive
+          (sha256:<url-or-hash>). Default — the official .sha256sum file
+          next to the archive. Set to "" to skip verification.
+      fleet_disable_security_context:
+        type: bool
+        default: false
+        description: >-
+          Set disableSecurityContext in chart values — drops securityContext
+          from fleet workloads. Needed on some hardened/PSA-restricted setups.
+      fleet_extra_values:
+        type: dict
+        default: {}
+        description: Extra fleet chart values rendered into the values file as-is.
+      fleet_gitrepo_enabled:
+        type: bool
+        default: false
+        description: Create a GitRepo resource (and auth secret) after the install.
+      fleet_gitrepo_name:
+        type: str
+        default: fleet-repo
+        description: GitRepo resource name.
+      fleet_gitrepo_namespace:
+        type: str
+        default: fleet-local
+        description: >-
+          GitRepo namespace. fleet-local targets the local cluster in a
+          standalone installation.
+      fleet_gitrepo_url:
+        type: str
+        default: ""
+        description: Git repository URL. Required when fleet_gitrepo_enabled is true.
+      fleet_gitrepo_branch:
+        type: str
+        default: main
+        description: Git branch to track.
+      fleet_gitrepo_paths:
+        type: list
+        elements: str
+        default: []
+        description: Paths within the repository to watch. Empty — repository root.
+      fleet_gitrepo_insecure_skip_tls:
+        type: bool
+        default: false
+        description: Skip TLS verification for the git server.
+      fleet_gitrepo_username:
+        type: str
+        default: fleet
+        description: Basic-auth username for private repositories.
+      fleet_gitrepo_token:
+        type: str
+        default: ""
+        description: >-
+          Basic-auth token/password. Empty — no secret is created and the
+          GitRepo is applied without clientSecretName (public repository).
+      fleet_gitrepo_secret_name:
+        type: str
+        default: fleet-gitrepo-auth
+        description: Name of the basic-auth secret.
+      fleet_no_log:
+        type: bool
+        default: true
+        description: Hide output of tasks handling the git token.

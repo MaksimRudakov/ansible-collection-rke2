@@ -37,3 +37,25 @@
       retries: 12
       delay: 10
       until: rke2_manifest_cm.stdout == 'rke2-manifests'
+
+    - name: Check fleet-controller is rolled out
+      ansible.builtin.command:
+        cmd: >-
+          /var/lib/rancher/rke2/bin/kubectl
+          --kubeconfig /etc/rancher/rke2/rke2.yaml
+          rollout status deployment/fleet-controller
+          -n cattle-fleet-system --timeout=180s
+      changed_when: false
+
+    - name: Check the local Fleet cluster is registered and ready
+      ansible.builtin.command:
+        cmd: >-
+          /var/lib/rancher/rke2/bin/kubectl
+          --kubeconfig /etc/rancher/rke2/rke2.yaml
+          get bundle fleet-agent-local -n fleet-local
+          -o jsonpath={.status.summary.ready}
+      register: rke2_fleet_agent_bundle
+      changed_when: false
+      retries: 18
+      delay: 10
+      until: rke2_fleet_agent_bundle.stdout == '1'

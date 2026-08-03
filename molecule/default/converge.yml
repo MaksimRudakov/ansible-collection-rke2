@@ -19,3 +19,23 @@
             source: rke2-manifests
   roles:
     - role: maksimrudakov.rke2.node
+
+# Fleet on top of the converged cluster: exercises the fleet role in CI —
+# helm install, charts, rollout wait; the idempotence phase re-runs it and
+# checks the pinned-version upgrade guard (second run must be changed=0)
+- name: Install Fleet standalone
+  hosts: all
+  become: true
+  vars:
+    fleet_version: "110.0.0+up0.16.0"  # pin = idempotent re-runs; bump deliberately
+    fleet_gitrepo_enabled: false
+  pre_tasks:
+    - name: Wait for node Ready (fleet pods need a schedulable node)
+      ansible.builtin.command:
+        cmd: >-
+          /var/lib/rancher/rke2/bin/kubectl
+          --kubeconfig /etc/rancher/rke2/rke2.yaml
+          wait --for=condition=Ready node --all --timeout=600s
+      changed_when: false
+  roles:
+    - role: maksimrudakov.rke2.fleet
