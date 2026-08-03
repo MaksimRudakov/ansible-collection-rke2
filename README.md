@@ -20,6 +20,8 @@ The collection ships a node-level role plus ready-to-run playbooks — the whole
 | playbook | `maksimrudakov.rke2.rotate_certs` | Rotate kube-apiserver serving certs after `rke2_tls_san` change |
 | playbook | `maksimrudakov.rke2.remove_node` | Remove node(s): cordon → drain → delete Node → `rke2-uninstall.sh`. Explicit target via `-e rke2_remove_hosts=<pattern>` |
 | playbook | `maksimrudakov.rke2.clustermesh_connect` | Connect two RKE2 clusters into a Cilium ClusterMesh (run with both inventories: `-i a/ -i b/`). Needs the cilium CLI on the controller |
+| role | `maksimrudakov.rke2.fleet` | [Rancher Fleet](https://fleet.rancher.io/) standalone GitOps: fleet-crd/fleet charts + optional `GitRepo` with auth secret |
+| playbook | `maksimrudakov.rke2.fleet` | Install Fleet on the first server; `-t gitrepo` re-applies only the GitRepo (paths, token rotation) |
 
 ## Requirements
 
@@ -83,6 +85,9 @@ ansible-playbook maksimrudakov.rke2.reconfig -i inventory/prod/
 
 # Certificate rotation after changing rke2_tls_san
 ansible-playbook maksimrudakov.rke2.rotate_certs -i inventory/prod/
+
+# Rancher Fleet standalone (GitOps) on top of the cluster
+ansible-playbook maksimrudakov.rke2.fleet -i inventory/prod/
 ```
 
 Role variables: see [`roles/node/meta/argument_specs.yml`](roles/node/meta/argument_specs.yml). Key ones: `rke2_version`, `rke2_airgap` + `rke2_mirror_base`, `rke2_registry_mirrors` / `rke2_registry_configs`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests`, `rke2_node_roles`, `rke2_etcd_snapshot_schedule_cron` / `rke2_etcd_snapshot_retention`, `rke2_cis_profile`, `rke2_allow_downgrade`.
@@ -114,6 +119,20 @@ ansible-playbook maksimrudakov.rke2.clustermesh_connect -i inventory/dc1/ -i inv
 ```
 
 Cluster names are read from the nodes themselves (with two merged inventories the group_vars of same-named groups override each other), kubeconfigs land in `$PWD/kubeconfig/` (override with `rke2_mesh_kubeconfig_dir`; keep out of VCS). RKE2 specifics are handled: the `rke2-cilium` helm release name and `--allow-mismatching-ca` for the default per-cluster CAs (`rke2_mesh_allow_mismatching_ca: false` once you ship a shared CA). Note: on RKE2 the cilium cluster-pool IPAM does not read `cluster-cidr` — set `ipam.operator.clusterPoolIPv4PodCIDRList` in `rke2_cilium_values` explicitly per cluster.
+
+### Rancher Fleet (GitOps)
+
+`maksimrudakov.rke2.fleet` installs [Fleet](https://fleet.rancher.io/) standalone (no Rancher Manager) on the first server and optionally registers a `GitRepo` — a minimal GitOps loop right after `deploy`:
+
+```yaml
+fleet_version: "110.0.0+up0.16.0"   # chart version as on charts.rancher.io
+fleet_gitrepo_enabled: true
+fleet_gitrepo_url: https://gitlab.example.com/infra/fleet-manifests.git
+fleet_gitrepo_token: "{{ vault_fleet_git_token }}"
+fleet_gitrepo_paths: [clusters/prod]
+```
+
+Empty `fleet_gitrepo_token` — public repo, no secret. `-t gitrepo` re-applies only the GitRepo (paths, token rotation). Variables: [`roles/fleet/meta/argument_specs.yml`](roles/fleet/meta/argument_specs.yml).
 
 ## Day-2 helpers (role entry points)
 

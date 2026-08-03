@@ -1,0 +1,15 @@
+---
+- name: Install Fleet standalone
+  ansible.builtin.include_tasks:
+    file: install.yml
+    apply:
+      tags: [install]
+  tags: [install]
+
+- name: Configure Fleet GitRepo
+  ansible.builtin.include_tasks:
+    file: gitrepo.yml
+    apply:
+      tags: [gitrepo]
+  when: fleet_gitrepo_enabled
+  tags: [gitrepo]

@@ -46,6 +46,12 @@ Everything below was exercised against a live stand: **8 KubeVirt/Harvester VMs*
 
 Two clusters from separate inventories (dc1 3+2 HA / dc2 1+1, different L3 subnets, non-overlapping CIDRs 10.10/10.20), connected with `maksimrudakov.rke2.clustermesh_connect`: `cilium connectivity test --multi-cluster` — 81/82 passed (the one failure is the log-scan catching transient connect-window warnings), cross-cluster global services verified, mesh survived scaling dc1 from 1+1 to 3+2 without reconnection.
 
+### Rancher Fleet role (unreleased, 2026-08)
+
+- Molecule: the `default` scenario installs Fleet on the real single-node RKE2 cluster (pinned chart), the idempotence phase re-runs the role (must be `changed=0` — exercises the version guard), verify asserts the controller rollout and the `fleet-agent-local` bundle readiness.
+- Stand e2e: fresh install (both clusters), private GitRepo with PAT, helm bundle deploys, GitOps update loop, per-cluster paths, `-t gitrepo` re-apply, **chart upgrade `109.0.5+up0.15.5` → `110.0.0+up0.16.0`** — GitRepo and bundles survive, deployed workloads keep running untouched (same pod).
+- Uninstall order caveat (documented): delete GitRepos and let bundles clean up BEFORE uninstalling the controller — otherwise `bundledeployment` finalizers hang namespaces with nobody to process them.
+
 ### Not yet covered end-to-end
 
 - EL 8/9 targets (Ubuntu only so far; the rpm install path is exercised in neither molecule nor the stand)

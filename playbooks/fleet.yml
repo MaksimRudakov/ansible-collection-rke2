@@ -1,0 +1,16 @@
+---
+# Install Rancher Fleet standalone on the cluster and optionally register a
+# GitRepo. Helm/kubectl run on the node itself, so the play targets the first
+# server only.
+#
+# Usage:
+#   ansible-playbook maksimrudakov.rke2.fleet -i inventory/<env>/
+#   ansible-playbook maksimrudakov.rke2.fleet -i inventory/<env>/ -t gitrepo
+#
+# Re-running is safe: helm upgrade --install and kubectl apply converge state.
+
+- name: Install Rancher Fleet standalone
+  hosts: rke2_servers[0]
+  become: true
+  roles:
+    - maksimrudakov.rke2.fleet

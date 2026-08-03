@@ -1,0 +1,2 @@
+{{ ({'disableSecurityContext': fleet_disable_security_context}
+    | combine(fleet_extra_values, recursive=True)) | to_nice_yaml(indent=2) }}

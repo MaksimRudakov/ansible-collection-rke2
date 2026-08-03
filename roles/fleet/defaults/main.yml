@@ -1,0 +1,52 @@
+---
+# Fleet chart version (as in charts.rancher.io, e.g. "110.0.0+up0.16.0").
+# Empty = latest available; NOTE: only a pinned version makes re-runs
+# idempotent (deployed chart is compared and upgrade is skipped)
+fleet_version: ""
+
+# Force helm upgrade even when the pinned chart version is already deployed —
+# needed to apply values changes (fleet_extra_values etc.)
+fleet_force_upgrade: false
+fleet_namespace: cattle-fleet-system
+fleet_chart_repo_name: fleet
+fleet_chart_repo_url: https://charts.rancher.io
+
+# --- Cluster access (RKE2 defaults) -------------------------------------------
+
+fleet_kubeconfig: /etc/rancher/rke2/rke2.yaml
+fleet_kubectl_bin: /var/lib/rancher/rke2/bin/kubectl
+
+# --- Helm binary ---------------------------------------------------------------
+
+# Install the helm binary on the target host; disable if helm is already present
+fleet_helm_install: true
+fleet_helm_version: "3.17.3"
+fleet_helm_bin: /usr/local/bin/helm
+fleet_helm_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+# Override for air-gapped installs (internal mirror); set checksum to "" to skip
+fleet_helm_url: "https://get.helm.sh/helm-v{{ fleet_helm_version }}-linux-{{ fleet_helm_arch }}.tar.gz"
+fleet_helm_checksum: "sha256:{{ fleet_helm_url }}.sha256sum"
+
+# --- Chart values --------------------------------------------------------------
+
+# Drop securityContext from fleet workloads; needed on some hardened setups
+fleet_disable_security_context: false
+# Arbitrary extra chart values merged into the rendered values file as-is
+fleet_extra_values: {}
+
+# --- GitRepo -------------------------------------------------------------------
+
+fleet_gitrepo_enabled: false
+fleet_gitrepo_name: fleet-repo
+fleet_gitrepo_namespace: fleet-local
+fleet_gitrepo_url: ""
+fleet_gitrepo_branch: main
+fleet_gitrepo_paths: []
+fleet_gitrepo_insecure_skip_tls: false
+
+# Basic-auth credentials for private repos. Empty token = no secret (public repo)
+fleet_gitrepo_username: fleet
+fleet_gitrepo_token: ""
+fleet_gitrepo_secret_name: fleet-gitrepo-auth
+
+fleet_no_log: true

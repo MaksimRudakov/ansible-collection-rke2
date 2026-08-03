@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: fleet
+  author: Maxim Rudakov
+  description: Rancher Fleet standalone GitOps controller on an RKE2 cluster
+  license: Apache-2.0
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+  galaxy_tags:
+    - kubernetes
+    - rke2
+    - fleet
+    - gitops
+
+dependencies: []

@@ -1,0 +1,74 @@
+---
+- name: Validate GitRepo configuration
+  ansible.builtin.assert:
+    that:
+      - fleet_gitrepo_url | length > 0
+    fail_msg: fleet_gitrepo_enabled requires fleet_gitrepo_url
+
+# manifests go through mkstemp'ed files, never predictable /tmp paths —
+# a fixed path in a world-writable directory is a symlink-attack surface
+- name: Create GitRepo auth secret
+  when: fleet_gitrepo_token | length > 0
+  block:
+    - name: Create temporary secret manifest file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: fleet-gitrepo-secret.yaml
+      register: fleet_secret_tmp
+      changed_when: false
+
+    - name: Template GitRepo auth secret
+      ansible.builtin.template:
+        src: fleet-gitrepo-secret.yaml.j2
+        dest: "{{ fleet_secret_tmp.path }}"
+        mode: "0600"
+      no_log: "{{ fleet_no_log }}"
+      changed_when: false
+
+    - name: Apply GitRepo auth secret
+      ansible.builtin.command:
+        cmd: "{{ fleet_kubectl_bin }} apply -f {{ fleet_secret_tmp.path }}"
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      register: fleet_secret_result
+      changed_when: "'configured' in fleet_secret_result.stdout or 'created' in fleet_secret_result.stdout"
+
+  always:
+    - name: Remove temporary secret manifest
+      ansible.builtin.file:
+        path: "{{ fleet_secret_tmp.path }}"
+        state: absent
+      when: fleet_secret_tmp.path is defined
+      changed_when: false
+
+- name: Apply GitRepo
+  block:
+    - name: Create temporary GitRepo manifest file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: fleet-gitrepo.yaml
+      register: fleet_gitrepo_tmp
+      changed_when: false
+
+    - name: Template GitRepo manifest
+      ansible.builtin.template:
+        src: fleet-gitrepo.yaml.j2
+        dest: "{{ fleet_gitrepo_tmp.path }}"
+        mode: "0600"
+      changed_when: false
+
+    - name: Apply GitRepo manifest
+      ansible.builtin.command:
+        cmd: "{{ fleet_kubectl_bin }} apply -f {{ fleet_gitrepo_tmp.path }}"
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      register: fleet_gitrepo_result
+      changed_when: "'configured' in fleet_gitrepo_result.stdout or 'created' in fleet_gitrepo_result.stdout"
+
+  always:
+    - name: Remove temporary GitRepo manifest
+      ansible.builtin.file:
+        path: "{{ fleet_gitrepo_tmp.path }}"
+        state: absent
+      when: fleet_gitrepo_tmp.path is defined
+      changed_when: false
