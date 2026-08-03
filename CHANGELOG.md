@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-03
+
+### Added
+- `maksimrudakov.rke2.clustermesh_connect` playbook: connect two RKE2 clusters into a Cilium ClusterMesh — collects kubeconfigs from both server nodes (cluster names derived from the rendered HelmChartConfig, immune to two-inventory group_vars merging), merges contexts and drives `cilium clustermesh connect` / `status --wait` with the RKE2 specifics baked in (`rke2-cilium` helm release name, `--allow-mismatching-ca` by default). Requires the cilium CLI on the controller.
+
 ## [1.2.0] - 2026-07-31
 
 ### Fixed
