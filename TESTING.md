@@ -42,6 +42,10 @@ Everything below was exercised against a live stand: **8 KubeVirt/Harvester VMs*
 | Cilium (default values) | kube-proxy replacement, Hubble relay/UI up, Prometheus metrics live on `:9962` (cilium_*) and `:9965` (hubble_* with workload context labels) |
 | Registry mirrors | docker.io / quay.io / registry.k8s.io / gcr.io / ghcr.io through a Nexus group proxy with auth; pull-through verified |
 
+### Cilium ClusterMesh (unreleased, 2026-08)
+
+Two clusters from separate inventories (dc1 3+2 HA / dc2 1+1, different L3 subnets, non-overlapping CIDRs 10.10/10.20), connected with `maksimrudakov.rke2.clustermesh_connect`: `cilium connectivity test --multi-cluster` — 81/82 passed (the one failure is the log-scan catching transient connect-window warnings), cross-cluster global services verified, mesh survived scaling dc1 from 1+1 to 3+2 without reconnection.
+
 ### Not yet covered end-to-end
 
 - EL 8/9 targets (Ubuntu only so far; the rpm install path is exercised in neither molecule nor the stand)

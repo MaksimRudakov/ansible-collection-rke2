@@ -1,0 +1,149 @@
+---
+# Connect two RKE2 clusters into a Cilium ClusterMesh.
+#
+# Run with BOTH cluster inventories (order does not matter):
+#   ansible-playbook maksimrudakov.rke2.clustermesh_connect \
+#     -i inventory/<cluster-a>/ -i inventory/<cluster-b>/
+#
+# Cluster names (= kubeconfig contexts) are derived from each cluster's
+# rendered rke2-cilium HelmChartConfig on the server node — NOT from
+# inventory variables: with two merged inventories the group_vars of
+# same-named groups override each other and cannot be trusted.
+#
+# Requirements:
+#   - cilium CLI on the controller
+#   - both inventories set distinct rke2_cilium_values cluster.name /
+#     cluster.id and enable the clustermesh apiserver
+#   - non-overlapping pod/service CIDRs
+#
+# Variables (see README):
+#   rke2_mesh_kubeconfig_dir      where kubeconfigs land on the controller
+#                                 (default $PWD/kubeconfig; keep out of VCS)
+#   rke2_mesh_helm_release        cilium helm release name (rke2-cilium)
+#   rke2_mesh_allow_mismatching_ca pass --allow-mismatching-ca (default true:
+#                                 without a shared CA each cluster has its own)
+#   rke2_mesh_wait_duration       clustermesh status --wait timeout (5m)
+#
+# Note: the connection patches the cilium helm release outside of the RKE2
+# HelmChartConfig — re-run this playbook after changing rke2_cilium_values.
+
+- name: Collect kubeconfigs from both clusters
+  hosts: rke2_servers
+  become: true
+  vars:
+    rke2_mesh_kubeconfig_dir: "{{ lookup('env', 'PWD') }}/kubeconfig"
+  tasks:
+    - name: Ensure local kubeconfig directory exists
+      ansible.builtin.file:
+        path: "{{ rke2_mesh_kubeconfig_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Read rendered cilium HelmChartConfig
+      ansible.builtin.slurp:
+        src: "{{ rke2_data_dir | default('/var/lib/rancher/rke2') }}/server/manifests/rke2-cilium-config.yaml"
+      register: rke2_mesh_cilium_manifest
+
+    - name: Derive cluster name from the node
+      ansible.builtin.set_fact:
+        rke2_mesh_cluster_name: >-
+          {{ ((rke2_mesh_cilium_manifest.content | b64decode | from_yaml).spec.valuesContent
+              | from_yaml).cluster.name }}
+
+    # HA-кластер: kubeconfig пишет только ПЕРВЫЙ сервер своего кластера,
+    # иначе все серверы перезаписывают один файл (последний выигрывает)
+    - name: Select the kubeconfig source server per cluster
+      ansible.builtin.set_fact:
+        rke2_mesh_kubeconfig_source: >-
+          {{ inventory_hostname == (groups['rke2_servers']
+             | map('extract', hostvars)
+             | selectattr('rke2_mesh_cluster_name', 'equalto', rke2_mesh_cluster_name)
+             | map(attribute='inventory_hostname') | first) }}
+
+    - name: Read cluster kubeconfig
+      ansible.builtin.slurp:
+        src: "{{ rke2_kubeconfig | default('/etc/rancher/rke2/rke2.yaml') }}"
+      register: rke2_mesh_kubeconfig_raw
+      no_log: true
+      when: rke2_mesh_kubeconfig_source
+
+    # rename only anchored YAML fields: a bare replace('default') could
+    # corrupt base64 certificate blobs
+    - name: Write kubeconfig locally with real server IP and named context
+      ansible.builtin.copy:
+        content: >-
+          {{ rke2_mesh_kubeconfig_raw.content | b64decode
+             | replace('https://127.0.0.1:6443', 'https://' ~ ansible_host ~ ':6443')
+             | regex_replace('(?m)^([ -]*(?:cluster|user|name|current-context)): default$', '\1: ' ~ rke2_mesh_cluster_name) }}
+        dest: "{{ rke2_mesh_kubeconfig_dir }}/{{ rke2_mesh_cluster_name }}.yaml"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      no_log: true
+      when: rke2_mesh_kubeconfig_source
+
+- name: Connect the clusters into ClusterMesh
+  hosts: localhost
+  gather_facts: false
+  vars:
+    rke2_mesh_kubeconfig_dir: "{{ lookup('env', 'PWD') }}/kubeconfig"
+    rke2_mesh_helm_release: rke2-cilium
+    rke2_mesh_allow_mismatching_ca: true
+    rke2_mesh_wait_duration: 5m
+    rke2_mesh_merged_kubeconfig: "{{ rke2_mesh_kubeconfig_dir }}/merged.yaml"
+    rke2_mesh_contexts: >-
+      {{ groups['rke2_servers'] | map('extract', hostvars, 'rke2_mesh_cluster_name')
+         | unique | list }}
+  environment:
+    KUBECONFIG: "{{ rke2_mesh_merged_kubeconfig }}"
+  tasks:
+    - name: Validate exactly two clusters in this run
+      ansible.builtin.assert:
+        that: rke2_mesh_contexts | length == 2
+        fail_msg: >-
+          Expected exactly 2 clusters, got {{ rke2_mesh_contexts }} — run with
+          both cluster inventories (-i inventory/a/ -i inventory/b/) and
+          distinct rke2_cilium_values cluster.name in each.
+
+    - name: Check cilium CLI is available
+      ansible.builtin.command:
+        cmd: cilium version --client
+      changed_when: false
+
+    - name: Merge kubeconfigs
+      ansible.builtin.shell:
+        cmd: >-
+          KUBECONFIG={{ rke2_mesh_kubeconfig_dir }}/{{ rke2_mesh_contexts[0] }}.yaml:{{ rke2_mesh_kubeconfig_dir }}/{{ rke2_mesh_contexts[1] }}.yaml
+          kubectl config view --flatten > {{ rke2_mesh_merged_kubeconfig }}
+          && chmod 600 {{ rke2_mesh_merged_kubeconfig }}
+      changed_when: true
+
+    - name: Connect ClusterMesh ({{ rke2_mesh_contexts | join(' <-> ') }})
+      ansible.builtin.command:
+        cmd: >-
+          cilium clustermesh connect
+          --helm-release-name {{ rke2_mesh_helm_release }}
+          {% if rke2_mesh_allow_mismatching_ca | bool %}--allow-mismatching-ca{% endif %}
+          --context {{ rke2_mesh_contexts[0] }}
+          --destination-context {{ rke2_mesh_contexts[1] }}
+      register: rke2_mesh_connect
+      changed_when: "'Connected' in rke2_mesh_connect.stdout or 'created' in rke2_mesh_connect.stdout"
+
+    - name: Wait for ClusterMesh readiness on both sides
+      ansible.builtin.command:
+        cmd: >-
+          cilium clustermesh status --helm-release-name {{ rke2_mesh_helm_release }}
+          --context {{ item }} --wait --wait-duration {{ rke2_mesh_wait_duration }}
+      loop: "{{ rke2_mesh_contexts }}"
+      register: rke2_mesh_status
+      changed_when: false
+
+    - name: ClusterMesh status
+      ansible.builtin.debug:
+        msg: "{{ item.stdout_lines | select('search', 'connected|ready') | list }}"
+      loop: "{{ rke2_mesh_status.results }}"
+      loop_control:
+        label: "{{ item.item }}"

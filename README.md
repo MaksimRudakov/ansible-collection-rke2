@@ -19,6 +19,7 @@ The collection ships a node-level role plus ready-to-run playbooks — the whole
 | playbook | `maksimrudakov.rke2.reconfig` | Rolling config reapply (kubelet args, labels, registries) without drain |
 | playbook | `maksimrudakov.rke2.rotate_certs` | Rotate kube-apiserver serving certs after `rke2_tls_san` change |
 | playbook | `maksimrudakov.rke2.remove_node` | Remove node(s): cordon → drain → delete Node → `rke2-uninstall.sh`. Explicit target via `-e rke2_remove_hosts=<pattern>` |
+| playbook | `maksimrudakov.rke2.clustermesh_connect` | Connect two RKE2 clusters into a Cilium ClusterMesh (run with both inventories: `-i a/ -i b/`). Needs the cilium CLI on the controller |
 
 ## Requirements
 
@@ -103,6 +104,16 @@ rke2_manifests:
           flannel:
             backend: vxlan
 ```
+
+### Cilium ClusterMesh
+
+Two clusters deployed from separate inventories (distinct `cluster.name`/`cluster.id` and non-overlapping CIDRs in `rke2_cilium_values`, clustermesh apiserver enabled) are connected with a single run:
+
+```bash
+ansible-playbook maksimrudakov.rke2.clustermesh_connect -i inventory/dc1/ -i inventory/dc2/
+```
+
+Cluster names are read from the nodes themselves (with two merged inventories the group_vars of same-named groups override each other), kubeconfigs land in `$PWD/kubeconfig/` (override with `rke2_mesh_kubeconfig_dir`; keep out of VCS). RKE2 specifics are handled: the `rke2-cilium` helm release name and `--allow-mismatching-ca` for the default per-cluster CAs (`rke2_mesh_allow_mismatching_ca: false` once you ship a shared CA). Note: on RKE2 the cilium cluster-pool IPAM does not read `cluster-cidr` — set `ipam.operator.clusterPoolIPv4PodCIDRList` in `rke2_cilium_values` explicitly per cluster.
 
 ## Day-2 helpers (role entry points)
 
