@@ -1,0 +1,12 @@
+---
+# The group hierarchy lives in a static file next to the plugin config:
+# the plugin only ASSIGNS hosts to groups, parents are declared here.
+# group_vars/rke2_cluster.yml attaches to the top group
+all:
+  children:
+    rke2_cluster:
+      children:
+        rke2_servers: {}
+        rke2_agents:
+          children:
+            workers: {}

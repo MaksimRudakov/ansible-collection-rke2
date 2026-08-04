@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-08-04
+
+### Changed
+- Documentation overhaul: the collection is positioned as CNI-agnostic (Cilium is a tuned default, not a requirement) in README and galaxy tags; new Quickstart and Dynamic inventories sections; variables grouped by area with `argument_specs` as the canonical reference; the outdated standalone-role migration section removed; release tags documented as annotated (signed optional).
+- Examples rewritten from real stand experience: fully annotated static inventory (`examples/inventory/`) covering registries, air-gap, kubelet production profile, etcd snapshots, CIS, sysctl-vs-image conflicts and Fleet; new dynamic KubeVirt/Harvester example (`examples/inventory-kubevirt/`) with label-driven topology and the bootstrap-ordering / label-scoping / inventory-merge caveats.
+
 ## [1.4.0] - 2026-08-03
 
 ### Added

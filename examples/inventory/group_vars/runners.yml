@@ -1,9 +1,16 @@
 ---
-# NOTE: rke2_node_labels is passed to kubelet --node-labels; kubelet may not
-# self-assign labels in the node-role.kubernetes.io namespace. Use your own
-# label here and set node-role labels via kubectl after join if needed
+# Node class "runners": everything that makes these nodes special lives here.
+
+# Plain labels go to kubelet --node-labels. Kubelet may NOT self-assign
+# node-role.kubernetes.io/* labels (NodeRestriction admission) — that is what
+# rke2_node_roles below is for
 rke2_node_labels:
   - "node-type=gitlab-runner"
 
 rke2_node_taints:
   - "dedicated=gitlab-runner:NoSchedule"
+
+# ROLES column in `kubectl get nodes`: applied via kubectl after join and
+# reconciled (stale roles are removed, RKE2-managed ones never touched)
+rke2_node_roles:
+  - runner
