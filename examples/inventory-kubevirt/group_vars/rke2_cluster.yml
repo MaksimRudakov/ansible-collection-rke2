@@ -1,0 +1,8 @@
+---
+# Cluster configuration — identical semantics to the static example;
+# see ../../inventory/group_vars/rke2_cluster.yml for the fully
+# annotated reference
+rke2_version: "v1.35.6+rke2r1"
+rke2_server_url: "https://<RKE2_API_FQDN>:9345"
+rke2_tls_san:
+  - <RKE2_API_FQDN>

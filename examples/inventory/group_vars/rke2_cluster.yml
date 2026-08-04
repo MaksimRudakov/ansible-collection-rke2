@@ -1,16 +1,136 @@
 ---
-rke2_version: "v1.34.3+rke2r3"
+# Annotated cluster configuration. Everything commented out shows the role
+# default — uncomment only what you change, so a collection upgrade is never
+# silently shadowed by a stale copy of an old default.
+# Canonical reference: roles/node/meta/argument_specs.yml
 
-# Stable registration address (DNS RR / VIP) is preferred over the
-# auto-derived first-master address
-rke2_server_url: "https://<RKE2_API_VIP>:9345"
+# --- Version ------------------------------------------------------------------
 
+# Always pin. Upgrades = bump this + run the upgrade playbook (rolling,
+# cordon/drain). Patch (v1.34.3 -> v1.34.9) and minor (v1.34 -> v1.35) hops
+# are both supported; downgrades are refused by the role
+rke2_version: "v1.35.6+rke2r1"
+
+# --- Topology & API access ------------------------------------------------------
+
+# Production: a stable registration address (DNS RR / VIP) instead of the
+# auto-derived first-master IP. The bootstrap server ignores it during the
+# initial bootstrap, so it is safe to set cluster-wide from day one
+rke2_server_url: "https://<RKE2_API_FQDN>:9345"
+
+# Extra SANs for the apiserver certificate (VIP/FQDN). After changing —
+# run the rotate_certs playbook
 rke2_tls_san:
   - <RKE2_API_FQDN>
 
-# Air-gapped installation through an internal mirror:
+# Join token: empty = fetched from the bootstrap node over delegation.
+# Set explicitly only if the bootstrap node may be replaced later
+# rke2_token: "{{ vault_rke2_token }}"
+
+# --- Air-gapped installation ----------------------------------------------------
+
+# Everything flows through an internal mirror (e.g. Nexus raw proxies).
+# The install script is fetched from the mirror and upstream URLs inside it
+# are rewritten (see rke2_airgap_url_rewrites in argument_specs)
 # rke2_airgap: true
 # rke2_mirror_base: "https://<NEXUS_HOST>"
+# rke2_install_method: tar   # for EL hosts without a mirrored RPM repo
+
+# --- Registries -----------------------------------------------------------------
+
+# Pull-through mirrors keep you off docker.io rate limits and make image
+# pulls fast/local. One Nexus/Harbor group proxy can front all upstreams
 # rke2_registry_mirrors:
 #   - name: docker.io
-#     endpoint: "{{ rke2_mirror_base }}"
+#     endpoint: "https://<PULL_PROXY_HOST>"
+#   - name: quay.io
+#     endpoint: "https://<PULL_PROXY_HOST>"
+#   - name: registry.k8s.io
+#     endpoint: "https://<PULL_PROXY_HOST>"
+#   - name: gcr.io
+#     endpoint: "https://<PULL_PROXY_HOST>"
+#   - name: ghcr.io
+#     endpoint: "https://<PULL_PROXY_HOST>"
+
+# Credentials: NEVER plaintext in git — vault lookup or ansible-vault.
+# The role puts no_log on every task touching these
+# rke2_registry_configs:
+#   - host: <PULL_PROXY_HOST>
+#     username: <ROBOT_USER>
+#     password: "{{ lookup('community.hashi_vault.hashi_vault', '<VAULT_PATH>') }}"
+
+# --- Networking & CNI ----------------------------------------------------------
+
+# Any CNI RKE2 supports. kube-proxy is kept automatically for non-Cilium CNIs
+# rke2_cni: cilium              # canal | calico | none | multus,cilium
+
+# Empty = RKE2 defaults (10.42.0.0/16 / 10.43.0.0/16). Change BOTH when the
+# cluster will peer with others (ClusterMesh needs non-overlapping CIDRs)
+# rke2_cluster_cidr: ""
+# rke2_service_cidr: ""
+
+# Cilium tuning. WARNING: setting this REPLACES the role defaults entirely
+# (override, not merge) — copy the full default block from
+# roles/node/defaults/main.yml and edit on top of it.
+# Two hard-earned rules:
+#   * cluster-pool IPAM does NOT read cluster-cidr from RKE2 — when changing
+#     CIDRs set ipam.operator.clusterPoolIPv4PodCIDRList explicitly
+#   * for ClusterMesh give every cluster a distinct cluster.name/cluster.id
+# rke2_cilium_values: {}
+
+# Arbitrary config.yaml keys the role does not expose as variables —
+# rendered as-is on servers AND agents (only put keys valid for both, or
+# scope via rke2_servers/rke2_agents group_vars)
+# rke2_extra_config:
+#   cluster-dns: 10.43.0.10
+
+# Arbitrary manifests dropped into the server manifests dir: HelmChartConfig
+# for any packaged component (canal/calico/coredns/...), your own HelmChart,
+# plain resources
+# rke2_manifests: []
+
+# --- kubelet: production profile -------------------------------------------------
+
+# Image GC: cleanup triggers above 80% disk usage and frees down to 60%.
+# Eviction: soft = early warning threshold with a grace period, hard = kill
+# now. Numbers below assume ~8 GB nodes — scale to your RAM
+rke2_kubelet_arg:
+  - "image-gc-high-threshold=80"
+  - "image-gc-low-threshold=60"
+  - "eviction-hard=memory.available<500Mi,nodefs.available<10%,imagefs.available<15%"
+  - "eviction-soft=memory.available<1Gi,nodefs.available<15%,imagefs.available<20%"
+  - "eviction-soft-grace-period=memory.available=2m,nodefs.available=2m,imagefs.available=2m"
+
+# --- etcd -----------------------------------------------------------------------
+
+# Snapshots: empty = RKE2 defaults (cron "0 */12 * * *", retention 5).
+# S3 upload — via rke2_extra_config (etcd-s3, etcd-s3-endpoint, ...)
+rke2_etcd_snapshot_schedule_cron: "0 */6 * * *"
+rke2_etcd_snapshot_retention: "12"
+
+# --- Security -------------------------------------------------------------------
+
+# CIS hardening: the role provisions the prerequisites itself (etcd system
+# user on servers, rke2-cis-sysctl.conf). Expect PodSecurity restricted:
+# workloads must run nonRoot/seccomp/no-privilege-escalation
+# rke2_cis_profile: cis
+
+# --- System tuning ---------------------------------------------------------------
+
+# If your VM image already manages the same sysctl keys in /etc/sysctl.conf,
+# align the values here with the image — /etc/sysctl.conf (99-sysctl.conf)
+# is applied AFTER the role's 99-kubernetes-sysctl.conf, and mismatched
+# values make the sysctl task flap on every run
+# rke2_sysctl_params:
+#   - name: fs.inotify.max_user_watches
+#     value: "524288"
+#   - name: fs.inotify.max_user_instances
+#     value: "8192"
+
+# --- Rancher Fleet (optional GitOps) ----------------------------------------------
+
+# fleet_version: "110.0.0+up0.16.0"   # chart version as on charts.rancher.io
+# fleet_gitrepo_enabled: true
+# fleet_gitrepo_url: https://<GIT_HOST>/<GROUP>/fleet-manifests.git
+# fleet_gitrepo_token: "{{ vault_fleet_git_token }}"
+# fleet_gitrepo_paths: [clusters/prod]

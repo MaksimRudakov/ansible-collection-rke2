@@ -52,7 +52,7 @@ What has been verified end-to-end on real clusters (and on which versions) is tr
 
 1. Bump `version` in `galaxy.yml`.
 2. Move `## [Unreleased]` section in `CHANGELOG.md` to a new `## [X.Y.Z]` section.
-3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z" && git push --tags`.
+3. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z` (signed `-s` if you have a GPG key configured).
 4. The release workflow verifies the version, builds the tarball, creates the GitHub release and publishes to Galaxy when `GALAXY_API_KEY` is configured.
 
 ## Reporting security issues

@@ -1,0 +1,24 @@
+---
+# Selection: ONLY this cluster's VMs (service_type is the cluster-unique
+# label; add more label pairs comma-separated — they AND together)
+plugin: kubevirt.core.kubevirt
+label_selector: tag.harvesterhci.io/service_type=<CLUSTER_NAME>
+host_format: '{name}'
+leading_separator: false
+# strip label prefixes into a flat tags dict: tag.harvesterhci.io/role=master
+# becomes tags.role == 'master'
+compose:
+  tags: >-
+    vmi_labels | dict2items
+    | rejectattr('key', '==', 'harvesterhci.io/vmName') | items2dict
+    | replace('tag.harvesterhci.io/', '')
+    | replace('kubevirt.io/', '') | replace('harvesterhci.io/', '')
+# map roles onto the collection contract; extra node classes = extra groups
+# (child them under rke2_agents in static-groups.yml)
+groups:
+  rke2_servers: tags.role == 'master'
+  workers: tags.role == 'worker'
+# optional: auto-groups from every label (service_type_*, role_*, ...)
+keyed_groups:
+  - key: tags
+    prefix: ''
