@@ -54,7 +54,9 @@
       register: rke2_detected_version
       changed_when: false
 
+    # `is search` (a test) yields a bool; regex_search returns a string and
+    # newer ansible-core rejects non-boolean conditionals
     - name: The reported version must be parseable by the role
       ansible.builtin.assert:
-        that: rke2_detected_version.stdout | regex_search('v\d+\.\d+\.\d+\+rke2r\d+')
+        that: rke2_detected_version.stdout is search('v\d+\.\d+\.\d+\+rke2r\d+')
         fail_msg: "Version output not matched by the role regex: {{ rke2_detected_version.stdout }}"
