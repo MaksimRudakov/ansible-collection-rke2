@@ -1,0 +1,13 @@
+---
+# No become: the docker connection already lands as root, and sudo inside the
+# Rocky images fails PAM account management ("Authentication service cannot
+# retrieve authentication info") on newer ansible-core. The role itself never
+# uses become, so running as root directly is equivalent
+- name: Prepare
+  hosts: all
+  tasks:
+    # curl is already present as curl-minimal; pulling in full curl conflicts
+    - name: Install packages required by the RKE2 install script
+      ansible.builtin.dnf:
+        name: tar
+        state: present

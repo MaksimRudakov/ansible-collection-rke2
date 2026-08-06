@@ -57,6 +57,18 @@ rke2_airgap_url_rewrites:
 # hosts if the RPM repository is not mirrored
 rke2_install_method: ""
 
+# Where to look for the installed rke2 binary, in priority order. The path
+# depends on the method install.sh picked: tar puts it under /usr/local/bin,
+# the RPM method (default on RHEL-family — install.sh switches to rpm whenever
+# yum is present) under /usr/bin, and tar falls back to /opt/rke2/bin when
+# /usr/local is read-only or a separate mount point (common with CIS disk
+# layouts). Version detection, the idempotency guard and the downgrade guard
+# all depend on finding it
+rke2_binary_search_paths:
+  - /usr/local/bin/rke2
+  - /usr/bin/rke2
+  - /opt/rke2/bin/rke2
+
 # RKE2 does not support downgrades (one-way etcd/API migrations); the role
 # fails if rke2_version is older than the installed one. Override at your risk
 rke2_allow_downgrade: false

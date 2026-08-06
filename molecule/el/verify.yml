@@ -1,0 +1,62 @@
+---
+# The real regression guard for this scenario is the idempotence step: with a
+# broken binary probe the role reinstalls RKE2 on every run. This play checks
+# the underlying cause directly, so a failure points at the reason, not just
+# at "some tasks were changed"
+- name: Verify
+  hosts: all
+  gather_facts: false
+  vars:
+    rke2_binary_search_paths:
+      - /usr/local/bin/rke2
+      - /usr/bin/rke2
+      - /opt/rke2/bin/rke2
+  tasks:
+    - name: Locate the rke2 binary as installed on this distro
+      ansible.builtin.command:
+        cmd: command -v rke2
+      register: rke2_real_path
+      changed_when: false
+      failed_when: false
+
+    - name: Probe the paths the role searches
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ rke2_binary_search_paths }}"
+      register: rke2_probe
+
+    # diagnostic only: reports which method install.sh picked
+    - name: Check which install method was used  # noqa: command-instead-of-module
+      ansible.builtin.command:
+        cmd: rpm -q rke2-common
+      register: rke2_rpm
+      changed_when: false
+      failed_when: false
+
+    - name: Report the installed layout
+      ansible.builtin.debug:
+        msg:
+          real_binary: "{{ rke2_real_path.stdout | default('NOT FOUND') }}"
+          found_by_role: "{{ rke2_probe.results | selectattr('stat.exists') | map(attribute='stat.path') | list }}"
+          rpm_package: "{{ rke2_rpm.stdout | default('not installed via rpm') }}"
+
+    - name: The role must find the installed RKE2 binary
+      ansible.builtin.assert:
+        that: rke2_probe.results | selectattr('stat.exists') | list | length > 0
+        fail_msg: >-
+          RKE2 is installed at {{ rke2_real_path.stdout | default('unknown') }} but none of
+          rke2_binary_search_paths matched — version detection, idempotency and the
+          downgrade guard are all broken on this distro.
+
+    - name: The detected binary must report a version
+      ansible.builtin.command:
+        cmd: "{{ (rke2_probe.results | selectattr('stat.exists') | map(attribute='stat.path') | first) }} --version"
+      register: rke2_detected_version
+      changed_when: false
+
+    # `is search` (a test) yields a bool; regex_search returns a string and
+    # newer ansible-core rejects non-boolean conditionals
+    - name: The reported version must be parseable by the role
+      ansible.builtin.assert:
+        that: rke2_detected_version.stdout is search('v\d+\.\d+\.\d+\+rke2r\d+')
+        fail_msg: "Version output not matched by the role regex: {{ rke2_detected_version.stdout }}"

@@ -1,0 +1,32 @@
+---
+driver:
+  name: docker
+platforms:
+  # both EL versions the collection claims support for: install.sh picks the
+  # RPM method on either, but the layouts are worth verifying separately
+  - name: rke2-el9
+    image: geerlingguy/docker-rockylinux9-ansible:latest
+    command: /usr/sbin/init
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/lib/rancher
+    devices:
+      - /dev/kmsg
+  - name: rke2-el8
+    image: geerlingguy/docker-rockylinux8-ansible:latest
+    command: /usr/sbin/init
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/lib/rancher
+    devices:
+      - /dev/kmsg
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_COLLECTIONS_PATH: "${MOLECULE_PROJECT_DIRECTORY}/../../..:${HOME}/.ansible/collections"
+verifier:
+  name: ansible

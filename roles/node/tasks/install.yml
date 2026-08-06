@@ -21,21 +21,41 @@
     mode: "0755"
   when: rke2_role == 'server'
 
+# The binary lands in a different place depending on the install method
+# install.sh picked (rpm on RHEL-family, tar elsewhere, /opt/rke2 when
+# /usr/local is not writable) — probing a single hardcoded path silently
+# reports "not installed" and breaks both idempotency and the downgrade guard
+- name: Locate the installed RKE2 binary
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ rke2_binary_search_paths }}"
+  register: rke2_binary_stat
+
+- name: Set RKE2 binary path fact
+  ansible.builtin.set_fact:
+    rke2_binary: >-
+      {{ rke2_binary_stat.results
+         | selectattr('stat.exists')
+         | selectattr('stat.executable')
+         | map(attribute='stat.path')
+         | first | default('', true) }}
+
 - name: Check current RKE2 version
   ansible.builtin.command:
-    cmd: /usr/local/bin/rke2 --version
+    cmd: "{{ rke2_binary }} --version"
   register: rke2_current_version
   changed_when: false
   failed_when: false
+  when: rke2_binary | length > 0
 
 - name: Determine rke2 service state
   ansible.builtin.include_tasks: service_state.yml
 
 - name: Set RKE2 install facts
   ansible.builtin.set_fact:
-    rke2_installed: "{{ rke2_current_version.rc == 0 }}"
+    rke2_installed: "{{ rke2_current_version.rc | default(1) == 0 }}"
     rke2_installed_version: "{{ rke2_current_version.stdout | default('') | regex_search('v\\d+\\.\\d+\\.\\d+\\+rke2r\\d+') | default('', true) }}"
-    rke2_needs_upgrade: "{{ rke2_current_version.rc == 0 and rke2_version not in (rke2_current_version.stdout | default('')) }}"
+    rke2_needs_upgrade: "{{ rke2_current_version.rc | default(1) == 0 and rke2_version not in (rke2_current_version.stdout | default('')) }}"
 
 # Downgrade is not supported by RKE2 (etcd schema / API migrations are one-way)
 - name: Refuse RKE2 downgrade
