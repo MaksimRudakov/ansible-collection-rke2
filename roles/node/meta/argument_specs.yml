@@ -90,6 +90,19 @@ argument_specs:
         default: ""
         choices: ["", tar, rpm]
         description: Forwarded as INSTALL_RKE2_METHOD. Use tar on air-gapped RHEL-family hosts.
+      rke2_binary_search_paths:
+        type: list
+        elements: str
+        default:
+          - /usr/local/bin/rke2
+          - /usr/bin/rke2
+          - /opt/rke2/bin/rke2
+        description: >-
+          Candidate paths for the installed rke2 binary, probed in order. Covers the tar
+          layout (/usr/local/bin), the RPM layout used on RHEL-family (/usr/bin) and the
+          tar fallback when /usr/local is read-only or a separate mount point
+          (/opt/rke2/bin). Version detection, idempotency and the downgrade guard depend
+          on this; extend the list for custom INSTALL_RKE2_TAR_PREFIX values.
       rke2_allow_downgrade:
         type: bool
         default: false

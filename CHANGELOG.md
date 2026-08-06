@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-08-06
+
+### Fixed
+- Detection of an already installed RKE2 no longer assumes the tarball layout. The role probed `/usr/local/bin/rke2` only, while `install.sh` switches to the RPM method whenever `yum` is present (all RHEL-family hosts) and installs to `/usr/bin/rke2` — and falls back to `/opt/rke2/bin/rke2` even with the tar method when `/usr/local` is read-only or a separate mount point (common with CIS disk layouts). On those hosts the role reported "not installed" on every run, so the install script was re-executed and `rke2-server` restarted on each converge, and the downgrade guard — gated on `rke2_needs_upgrade` — never fired at all. The binary is now located through `rke2_binary_search_paths` (new variable, extend it for custom `INSTALL_RKE2_TAR_PREFIX` values).
+
+### Added
+- `el` molecule scenario (Rocky Linux 8 and 9 — both EL versions listed in `meta/main.yml`) covering the RHEL-family install path, wired into the CI matrix. Guards the RPM-layout regression above: with a broken probe the idempotence step fails.
+
 ## [1.4.1] - 2026-08-04
 
 ### Changed
@@ -64,7 +72,12 @@ Initial collection release. Supersedes the standalone `maksimrudakov.rke2` role 
 - `tasks_from: config` populates the restart-guard fact itself, so config-only runs restart a running service correctly.
 - `config-server.yaml.j2` omits `server:` on the bootstrap node — `rke2_server_url` is safe to set cluster-wide.
 
-[Unreleased]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.1...v1.4.2
+[1.4.1]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.0...v1.4.1
+[1.4.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/releases/tag/v1.0.0

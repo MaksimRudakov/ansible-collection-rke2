@@ -1,0 +1,24 @@
+---
+# Scoped to install.yml on purpose: the question under test is whether the
+# role detects an existing RKE2 on RPM-based distros, not whether a cluster
+# bootstraps inside a container
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    rke2_role: server
+    rke2_first_server: true
+    rke2_no_log: false
+    rke2_sysctl_params: []  # not writable inside a container
+  tasks:
+    - name: Run install tasks
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: install
+
+    - name: Report detection facts
+      ansible.builtin.debug:
+        msg:
+          installed: "{{ rke2_installed }}"
+          installed_version: "{{ rke2_installed_version }}"
+          needs_upgrade: "{{ rke2_needs_upgrade }}"

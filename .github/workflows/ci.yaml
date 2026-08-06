@@ -32,7 +32,9 @@ jobs:
       matrix:
         # airgap: fast install-path test with a mock mirror (no real RKE2)
         # default: full single-node RKE2 bootstrap in a privileged container
-        scenario: [airgap, default]
+        # el: RHEL-family install path — install.sh switches to the RPM method
+        #     there, which puts the binary outside the tar layout
+        scenario: [airgap, default, el]
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

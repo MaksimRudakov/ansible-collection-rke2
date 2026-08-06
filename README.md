@@ -94,7 +94,7 @@ Canonical variable reference: [`roles/node/meta/argument_specs.yml`](roles/node/
 
 | Area | Variables |
 |------|-----------|
-| Installation & air-gap | `rke2_version`, `rke2_airgap` + `rke2_mirror_base` + `rke2_airgap_url_rewrites`, `rke2_install_method`, `rke2_allow_downgrade` |
+| Installation & air-gap | `rke2_version`, `rke2_airgap` + `rke2_mirror_base` + `rke2_airgap_url_rewrites`, `rke2_install_method`, `rke2_binary_search_paths`, `rke2_allow_downgrade` |
 | Topology & API access | `rke2_server_url`, `rke2_token`, `rke2_tls_san`, `rke2_servers_group` / `rke2_first_server` |
 | Networking & CNI | `rke2_cni`, `rke2_disable_kube_proxy` (derived), `rke2_cluster_cidr`, `rke2_service_cidr`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests` |
 | Node classes | `rke2_node_labels`, `rke2_node_taints`, `rke2_node_roles` (ROLES column via kubectl — kubelet may not self-assign those), `rke2_kubelet_arg`, per-component args |

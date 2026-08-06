@@ -1,0 +1,10 @@
+---
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    # curl is already present as curl-minimal; pulling in full curl conflicts
+    - name: Install packages required by the RKE2 install script
+      ansible.builtin.dnf:
+        name: tar
+        state: present
