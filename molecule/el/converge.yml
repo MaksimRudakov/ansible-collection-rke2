@@ -4,7 +4,6 @@
 # bootstraps inside a container
 - name: Converge
   hosts: all
-  become: true
   vars:
     rke2_role: server
     rke2_first_server: true

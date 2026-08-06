@@ -5,7 +5,6 @@
 # at "some tasks were changed"
 - name: Verify
   hosts: all
-  become: true
   gather_facts: false
   vars:
     rke2_binary_search_paths:
