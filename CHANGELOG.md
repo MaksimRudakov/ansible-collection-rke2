@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-08-13
+
+### Added
+- EL 10 declared as a supported platform (`meta/main.yml`, README) and covered by the `el` molecule scenario as a third instance. Verified on a live Rocky Linux 10.2 cluster: the RPM layout is identical to EL 8/9, so the 1.4.2 binary-detection fix applies unchanged. Upstream has no geerlingguy image for EL10 yet; `rockylinux/rockylinux:10-ubi-init` ships python3 and systemd and works as-is.
+
 ## [1.4.2] - 2026-08-06
 
 ### Fixed
@@ -72,7 +77,8 @@ Initial collection release. Supersedes the standalone `maksimrudakov.rke2` role 
 - `tasks_from: config` populates the restart-guard fact itself, so config-only runs restart a running service correctly.
 - `config-server.yaml.j2` omits `server:` on the bootstrap node — `rke2_server_url` is safe to set cluster-wide.
 
-[Unreleased]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.3...HEAD
+[1.4.3]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/MaksimRudakov/ansible-collection-rke2/compare/v1.3.0...v1.4.0
