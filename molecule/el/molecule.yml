@@ -24,6 +24,18 @@ platforms:
       - /var/lib/rancher
     devices:
       - /dev/kmsg
+  # no geerlingguy image for EL10 yet; the upstream ubi-init image already
+  # ships python3 + systemd, so it works as-is
+  - name: rke2-el10
+    image: rockylinux/rockylinux:10-ubi-init
+    command: /usr/sbin/init
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/lib/rancher
+    devices:
+      - /dev/kmsg
 provisioner:
   name: ansible
   env:

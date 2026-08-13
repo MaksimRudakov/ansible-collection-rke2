@@ -39,7 +39,7 @@ The collection ships node-level roles plus ready-to-run playbooks — the whole 
 ## Requirements
 
 - ansible-core >= 2.15 (tested with 2.16), `ansible.posix` collection (installed as a dependency)
-- Ubuntu 22.04/24.04 or EL 8/9 targets with systemd
+- Ubuntu 22.04/24.04 or EL 8/9/10 targets with systemd
 
 ## Quickstart
 
