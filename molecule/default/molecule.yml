@@ -16,6 +16,8 @@ platforms:
       - /dev/kmsg
 provisioner:
   name: ansible
+  playbooks:
+    side_effect: side_effect.yml
   env:
     # collection root is <...>/collections/ansible_collections/maksimrudakov/rke2;
     # keep the default user path so community.docker etc. stay resolvable

@@ -6,6 +6,7 @@
 # etcd, master) are never touched. Retries cover the gap between kubelet
 # start and Node object registration
 - name: Get current node labels
+  check_mode: false
   ansible.builtin.command:
     cmd: >-
       {{ rke2_kubectl }} --kubeconfig {{ rke2_kubeconfig }}

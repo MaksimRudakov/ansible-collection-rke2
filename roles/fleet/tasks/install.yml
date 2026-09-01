@@ -1,5 +1,6 @@
 ---
 - name: Check installed helm version
+  check_mode: false
   ansible.builtin.command:
     cmd: "{{ fleet_helm_bin }} version --short"
   register: fleet_helm_current
@@ -14,6 +15,7 @@
       or fleet_helm_current.stdout.split('+') | first != 'v' ~ fleet_helm_version
   block:
     - name: Create temporary download directory
+      check_mode: false
       ansible.builtin.tempfile:
         state: directory
         suffix: fleet-helm
@@ -21,6 +23,7 @@
       changed_when: false
 
     - name: Download helm archive
+      check_mode: false
       ansible.builtin.get_url:
         url: "{{ fleet_helm_url }}"
         dest: "{{ fleet_helm_tmp.path }}/{{ fleet_helm_url | basename }}"
@@ -28,6 +31,7 @@
         mode: "0644"
 
     - name: Extract helm archive
+      check_mode: false
       ansible.builtin.unarchive:
         src: "{{ fleet_helm_tmp.path }}/{{ fleet_helm_url | basename }}"
         dest: "{{ fleet_helm_tmp.path }}"
@@ -42,6 +46,7 @@
 
   always:
     - name: Remove temporary download directory
+      check_mode: false
       ansible.builtin.file:
         path: "{{ fleet_helm_tmp.path }}"
         state: absent
@@ -49,6 +54,7 @@
       changed_when: false
 
 - name: Add Fleet helm repo
+  check_mode: false
   ansible.builtin.command:
     cmd: >-
       {{ fleet_helm_bin }} repo add {{ fleet_chart_repo_name }}
@@ -59,6 +65,7 @@
   changed_when: false
 
 - name: Update helm repos
+  check_mode: false
   ansible.builtin.command:
     cmd: "{{ fleet_helm_bin }} repo update {{ fleet_chart_repo_name }}"
   environment:
@@ -81,6 +88,7 @@
 # already deployed. Values drift is not detected — use fleet_force_upgrade
 # after changing fleet_extra_values / fleet_disable_security_context
 - name: Check deployed Fleet releases
+  check_mode: false
   ansible.builtin.command:
     cmd: "{{ fleet_helm_bin }} list --namespace {{ fleet_namespace }} --output json"
   environment:
@@ -111,6 +119,7 @@
     or ('fleet-crd-' ~ fleet_version) not in fleet_deployed_charts
 
 - name: Render Fleet values
+  check_mode: false
   ansible.builtin.tempfile:
     state: file
     suffix: fleet-values.yaml
@@ -118,6 +127,7 @@
   changed_when: false
 
 - name: Deploy Fleet values
+  check_mode: false
   ansible.builtin.template:
     src: fleet-values.yaml.j2
     dest: "{{ fleet_values_tmp.path }}"
@@ -143,6 +153,7 @@
     or ('fleet-' ~ fleet_version) not in fleet_deployed_charts
 
 - name: Remove temporary values file
+  check_mode: false
   ansible.builtin.file:
     path: "{{ fleet_values_tmp.path }}"
     state: absent
