@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-09-01
+
+### Fixed
+- `--check` mode support: read-only probes (installed RKE2/helm version, deployed Fleet releases, current node-role labels) and tempfile scaffolding (install script, Fleet values, GitRepo manifests — created and cleaned up in the same run) now carry `check_mode: false`, so check runs no longer skip them and fail on undefined registered results. Everything that actually changes the system (install script run, helm binary install, helm upgrades, kubectl apply) is still held by check mode. The `default` molecule scenario gained a `side_effect` phase that replays both roles with `check_mode: true` on the converged host to keep this class covered in CI.
+
 ## [1.4.3] - 2026-08-13
 
 ### Added

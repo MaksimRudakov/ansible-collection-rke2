@@ -1,0 +1,36 @@
+---
+# Regression for --check support: converge must survive check mode on an
+# already-converged host. Read-only probes and tempfile scaffolding carry
+# check_mode: false; everything that really changes the system is held.
+# A play-level check_mode: true is equivalent to ansible-playbook --check
+- name: Node role in check mode
+  hosts: all
+  become: true
+  check_mode: true
+  vars:
+    rke2_role: server
+    rke2_first_server: true
+    rke2_no_log: false
+    rke2_sysctl_params: []  # not writable inside a container
+    rke2_manifests:
+      - name: molecule-test-cm
+        content:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: molecule-test
+            namespace: kube-system
+          data:
+            source: rke2-manifests
+  roles:
+    - role: maksimrudakov.rke2.node
+
+- name: Fleet role in check mode
+  hosts: all
+  become: true
+  check_mode: true
+  vars:
+    fleet_version: "110.0.0+up0.16.0"
+    fleet_gitrepo_enabled: false
+  roles:
+    - role: maksimrudakov.rke2.fleet

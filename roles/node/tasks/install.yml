@@ -41,6 +41,7 @@
          | first | default('', true) }}
 
 - name: Check current RKE2 version
+  check_mode: false
   ansible.builtin.command:
     cmd: "{{ rke2_binary }} --version"
   register: rke2_current_version
@@ -74,6 +75,7 @@
     - not (rke2_allow_downgrade | bool)
 
 - name: Create temporary file for install script
+  check_mode: false
   ansible.builtin.tempfile:
     state: file
     prefix: rke2-install.
@@ -82,6 +84,7 @@
   when: not rke2_installed or rke2_needs_upgrade
 
 - name: Download RKE2 install script
+  check_mode: false
   ansible.builtin.get_url:
     url: "{{ rke2_airgap_install_script_url if rke2_airgap else rke2_install_script_url }}"
     dest: "{{ rke2_install_script_tmp.path }}"
@@ -91,6 +94,7 @@
   when: not rke2_installed or rke2_needs_upgrade
 
 - name: Patch install script for air-gapped mirrors
+  check_mode: false
   ansible.builtin.replace:
     path: "{{ rke2_install_script_tmp.path }}"
     regexp: "{{ item.regexp }}"
@@ -111,6 +115,7 @@
   when: not rke2_installed or rke2_needs_upgrade
 
 - name: Remove install script
+  check_mode: false
   ansible.builtin.file:
     path: "{{ rke2_install_script_tmp.path }}"
     state: absent
