@@ -11,6 +11,54 @@
   ansible.builtin.include_tasks: join_params.yml
   when: rke2_server_url | length == 0 or rke2_token | length == 0
 
+# A kubelet flag silently overrides the same field in any drop-in, so a
+# setting duplicated in both places would look applied and be ignored
+- name: Refuse kubelet settings duplicated in rke2_kubelet_arg and rke2_kubelet_config
+  ansible.builtin.assert:
+    that: rke2_kubelet_conflicts | length == 0
+    fail_msg: >-
+      rke2_kubelet_arg and rke2_kubelet_config both set
+      {{ rke2_kubelet_conflicts | join(', ') }}. Flags override the drop-in —
+      move the setting to rke2_kubelet_config and drop the flag
+  vars:
+    rke2_kubelet_conflicts: >-
+      {{ rke2_kubelet_arg
+         | map('regex_replace', '^(?:--)?([^=]+)=?.*$', '\1')
+         | select('in', rke2_kubelet_flag_fields)
+         | map('extract', rke2_kubelet_flag_fields)
+         | intersect(rke2_kubelet_config.keys() | list) }}
+    rke2_kubelet_flag_fields:
+      image-gc-high-threshold: imageGCHighThresholdPercent
+      image-gc-low-threshold: imageGCLowThresholdPercent
+      minimum-image-ttl-duration: imageMinimumGCAge
+      eviction-hard: evictionHard
+      eviction-soft: evictionSoft
+      eviction-soft-grace-period: evictionSoftGracePeriod
+      eviction-minimum-reclaim: evictionMinimumReclaim
+      eviction-max-pod-grace-period: evictionMaxPodGracePeriod
+      eviction-pressure-transition-period: evictionPressureTransitionPeriod
+      system-reserved: systemReserved
+      kube-reserved: kubeReserved
+      max-pods: maxPods
+      pod-max-pids: podPidsLimit
+      cgroup-driver: cgroupDriver
+      serialize-image-pulls: serializeImagePulls
+      registry-qps: registryPullQPS
+      registry-burst: registryBurst
+      event-qps: eventRecordQPS
+      event-burst: eventBurst
+      kube-api-qps: kubeAPIQPS
+      kube-api-burst: kubeAPIBurst
+      container-log-max-size: containerLogMaxSize
+      container-log-max-files: containerLogMaxFiles
+      protect-kernel-defaults: protectKernelDefaults
+      streaming-connection-idle-timeout: streamingConnectionIdleTimeout
+      node-status-update-frequency: nodeStatusUpdateFrequency
+      node-status-report-frequency: nodeStatusReportFrequency
+      cpu-manager-policy: cpuManagerPolicy
+      topology-manager-policy: topologyManagerPolicy
+      feature-gates: featureGates
+
 - name: Deploy registries.yaml
   ansible.builtin.template:
     src: registries.yaml.j2
@@ -40,6 +88,37 @@
     mode: "0600"
   no_log: "{{ rke2_no_log }}"
   notify: Restart rke2
+
+# The directory is created by RKE2 on first start; on a fresh node it does
+# not exist yet, and the drop-in must be in place before that start
+- name: Ensure kubelet config drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ rke2_kubelet_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: rke2_kubelet_config | length > 0
+
+- name: Deploy kubelet config drop-in
+  ansible.builtin.copy:
+    content: |
+      apiVersion: kubelet.config.k8s.io/v1beta1
+      kind: KubeletConfiguration
+      {{ rke2_kubelet_config | to_nice_yaml(indent=2) }}
+    dest: "{{ rke2_kubelet_config_dir }}/{{ rke2_kubelet_config_name }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart rke2
+  when: rke2_kubelet_config | length > 0
+
+- name: Remove kubelet config drop-in when unset
+  ansible.builtin.file:
+    path: "{{ rke2_kubelet_config_dir }}/{{ rke2_kubelet_config_name }}.conf"
+    state: absent
+  notify: Restart rke2
+  when: rke2_kubelet_config | length == 0
 
 - name: Deploy Cilium HelmChartConfig
   ansible.builtin.template:

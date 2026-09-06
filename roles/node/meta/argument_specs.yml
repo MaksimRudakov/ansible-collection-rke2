@@ -193,7 +193,30 @@ argument_specs:
       rke2_kubelet_arg:
         type: list
         elements: str
-        description: Extra kubelet arguments.
+        default: []
+        description: >-
+          Extra kubelet flags (kubelet-arg). Prefer rke2_kubelet_config: the
+          image-gc/eviction/reserved flags are deprecated upstream, and a flag
+          always overrides the same field in the drop-in. The role fails when
+          a setting is present in both.
+      rke2_kubelet_config:
+        type: dict
+        description: >-
+          KubeletConfiguration fields written as a drop-in to
+          rke2_kubelet_config_dir. Merged over 00-rke2-defaults.conf by key
+          (maps merge, scalars override; RKE2-set keys cannot be removed).
+          Default: image GC + eviction production profile. Empty dict removes
+          the drop-in.
+      rke2_kubelet_config_dir:
+        type: str
+        default: "{{ rke2_data_dir }}/agent/etc/kubelet.conf.d"
+        description: Kubelet --config-dir as passed by RKE2.
+      rke2_kubelet_config_name:
+        type: str
+        default: 10-ansible
+        description: >-
+          Drop-in file name without .conf; must sort after
+          00-rke2-defaults.conf.
       rke2_kube_apiserver_arg:
         type: list
         elements: str

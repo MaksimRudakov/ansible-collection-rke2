@@ -41,6 +41,8 @@ CI (`.github/workflows/ci.yaml`): ansible-lint → molecule matrix (airgap, defa
 
 **Air-gapped mode:** `rke2_airgap: true` + `rke2_mirror_base` fetches the install script from the mirror and rewrites upstream URLs inside it (`rke2_airgap_url_rewrites`). Downgrades are refused unless `rke2_allow_downgrade: true`.
 
+**Kubelet tuning:** `rke2_kubelet_config` is written as a `KubeletConfiguration` drop-in (`10-ansible.conf`) into the `--config-dir` RKE2 passes to kubelet, next to its `00-rke2-defaults.conf` (lexical order, maps merge by key, scalars override, RKE2-set keys cannot be removed). `rke2_kubelet_arg` is for flags without a config-file field only: a flag silently overrides the drop-in, so `config.yml` asserts that no setting is present in both (flag → field map lives in that task). The `default` molecule scenario verifies the merge through `configz`. Requires RKE2 v1.32+.
+
 **CNI-agnostic:** `rke2_cni` defaults to `cilium`; `rke2_disable_kube_proxy` is derived (`true` only for cilium). Cilium tuning goes through `rke2_cilium_values` → HelmChartConfig template. Any other CNI/config is covered by `rke2_extra_config` (merged into config.yaml as-is) and `rke2_manifests` (arbitrary manifests dropped into the server manifests dir).
 
 **Molecule quirks (do not remove):** the `default` scenario runs real RKE2 in docker and needs the `/var/lib/rancher` anonymous volume (overlayfs-on-overlayfs), privileged + `cgroupns_mode: host`, `/dev/kmsg`, and the prepare-step workarounds. Plays that are informational-only carry `tags: [molecule-notest]`.

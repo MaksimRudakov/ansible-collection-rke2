@@ -91,15 +91,34 @@ rke2_tls_san:
 
 # --- kubelet: production profile -------------------------------------------------
 
-# Image GC: cleanup triggers above 80% disk usage and frees down to 60%.
-# Eviction: soft = early warning threshold with a grace period, hard = kill
-# now. Numbers below assume ~8 GB nodes — scale to your RAM
-rke2_kubelet_arg:
-  - "image-gc-high-threshold=80"
-  - "image-gc-low-threshold=60"
-  - "eviction-hard=memory.available<500Mi,nodefs.available<10%,imagefs.available<15%"
-  - "eviction-soft=memory.available<1Gi,nodefs.available<15%,imagefs.available<20%"
-  - "eviction-soft-grace-period=memory.available=2m,nodefs.available=2m,imagefs.available=2m"
+# KubeletConfiguration drop-in (10-ansible.conf next to RKE2's
+# 00-rke2-defaults.conf; maps merge by key, scalars override).
+# Image GC: cleanup triggers above 80% disk usage and frees down to 60%;
+# imageMaximumGCAge removes images unused for N regardless of disk usage
+# (config-only, no flag exists). Eviction: soft = early warning threshold
+# with a grace period, hard = kill now. Numbers below assume ~8 GB nodes —
+# scale to your RAM
+rke2_kubelet_config:
+  imageGCHighThresholdPercent: 80
+  imageGCLowThresholdPercent: 60
+  imageMaximumGCAge: 168h
+  evictionHard:
+    memory.available: 500Mi
+    nodefs.available: 10%
+    imagefs.available: 15%
+  evictionSoft:
+    memory.available: 1Gi
+    nodefs.available: 15%
+    imagefs.available: 20%
+  evictionSoftGracePeriod:
+    memory.available: 2m
+    nodefs.available: 2m
+    imagefs.available: 2m
+
+# Flags only for settings without a config-file field. Never duplicate a
+# field set above: the flag silently wins and the role refuses the combination
+# rke2_kubelet_arg:
+#   - "node-ip=<NODE_IP>"
 
 # --- etcd -----------------------------------------------------------------------
 

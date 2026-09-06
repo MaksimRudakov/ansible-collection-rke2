@@ -25,6 +25,40 @@
         that:
           - rke2_config_stat.stat.mode == '0600'
 
+    - name: Check kubelet drop-in sits next to the RKE2 defaults
+      ansible.builtin.find:
+        paths: /var/lib/rancher/rke2/agent/etc/kubelet.conf.d
+        patterns: "*.conf"
+      register: rke2_kubelet_dropins
+
+    - name: Assert both kubelet config files are present
+      ansible.builtin.assert:
+        that:
+          - rke2_kubelet_dropins.files | map(attribute='path') | map('basename') | sort
+            == ['00-rke2-defaults.conf', '10-ansible.conf']
+
+    - name: Read effective kubelet configuration (configz)
+      ansible.builtin.command:
+        cmd: >-
+          /var/lib/rancher/rke2/bin/kubectl
+          --kubeconfig /etc/rancher/rke2/rke2.yaml
+          get --raw /api/v1/nodes/{{ ansible_hostname }}/proxy/configz
+      register: rke2_configz
+      changed_when: false
+      retries: 12
+      delay: 10
+      until: rke2_configz.rc == 0
+
+    - name: Assert the drop-in is merged over 00-rke2-defaults.conf
+      ansible.builtin.assert:
+        that:
+          - rke2_kubelet_cfg.imageMaximumGCAge == '168h0m0s'
+          - rke2_kubelet_cfg.evictionHard['memory.available'] == '123Mi'
+          # RKE2 default keys survive next to ours: maps merge, not replace
+          - rke2_kubelet_cfg.evictionHard['nodefs.available'] is defined
+      vars:
+        rke2_kubelet_cfg: "{{ (rke2_configz.stdout | from_json).kubeletconfig }}"
+
     - name: Check custom manifest applied by RKE2
       ansible.builtin.command:
         cmd: >-

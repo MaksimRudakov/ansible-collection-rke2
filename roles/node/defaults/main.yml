@@ -108,12 +108,34 @@ rke2_node_taints: []
 # role applies them with kubectl over delegation after the node joins
 rke2_node_roles: []
 
-rke2_kubelet_arg:
-  - "image-gc-high-threshold=85"
-  - "image-gc-low-threshold=80"
-  - "eviction-hard=memory.available<100Mi,nodefs.available<10%,imagefs.available<15%"
-  - "eviction-soft=memory.available<300Mi,nodefs.available<15%,imagefs.available<20%"
-  - "eviction-soft-grace-period=memory.available=2m30s,nodefs.available=2m30s,imagefs.available=2m30s"
+# Extra kubelet flags (kubelet-arg in config.yaml). Prefer rke2_kubelet_config:
+# the image-gc/eviction/reserved flags are deprecated upstream, and a flag
+# always beats the drop-in file — the same setting in both places makes the
+# drop-in dead weight. The role fails on such a conflict
+rke2_kubelet_arg: []
+
+# KubeletConfiguration drop-in written to <data-dir>/agent/etc/kubelet.conf.d.
+# RKE2 starts kubelet with --config-dir and ships 00-rke2-defaults.conf there;
+# files apply in lexical order, maps merge by key, scalars override. A key set
+# by RKE2 can be overridden but not removed. Empty dict = no drop-in
+rke2_kubelet_config:
+  imageGCHighThresholdPercent: 85
+  imageGCLowThresholdPercent: 80
+  evictionHard:
+    memory.available: 100Mi
+    nodefs.available: 10%
+    imagefs.available: 15%
+  evictionSoft:
+    memory.available: 300Mi
+    nodefs.available: 15%
+    imagefs.available: 20%
+  evictionSoftGracePeriod:
+    memory.available: 2m30s
+    nodefs.available: 2m30s
+    imagefs.available: 2m30s
+rke2_kubelet_config_dir: "{{ rke2_data_dir }}/agent/etc/kubelet.conf.d"
+# Must sort after 00-rke2-defaults.conf, otherwise RKE2 defaults win
+rke2_kubelet_config_name: 10-ansible
 
 rke2_kube_apiserver_arg: []
 rke2_kube_controller_manager_arg:

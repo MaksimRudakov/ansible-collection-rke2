@@ -2,7 +2,7 @@
 # Rolling reapply of config.yaml / registries.yaml with a guarded restart.
 # No drain: containerd is not restarted, workloads keep running.
 #
-# Use for changes to kubelet-arg, component args, node labels/taints,
+# Use for changes to kubelet config / kubelet-arg, component args, node labels/taints,
 # registry mirrors, etcd-expose-metrics etc. For tls-san changes use
 # maksimrudakov.rke2.rotate_certs.
 #

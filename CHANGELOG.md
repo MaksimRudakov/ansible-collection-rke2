@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-06
+
+### Added
+- `rke2_kubelet_config`: `KubeletConfiguration` fields written as a drop-in (`rke2_kubelet_config_name`, default `10-ansible`) into the `--config-dir` RKE2 passes to kubelet (`rke2_kubelet_config_dir`), next to RKE2's own `00-rke2-defaults.conf`. Verified on a live node: files apply in lexical order, maps merge by key, scalars override, RKE2-set keys can be overridden but not removed. Enables config-only settings such as `imageMaximumGCAge`. An empty dict removes the drop-in; changes go through the `Restart rke2` handler, so `reconfig` rolls them out with cordon/drain as usual.
+- Guard against a kubelet setting present both as a flag in `rke2_kubelet_arg` and as a field in `rke2_kubelet_config`: the flag silently overrides every drop-in, so the role fails instead of leaving a dead-weight config.
+
+### Changed
+- Default kubelet image GC / eviction profile moved from `rke2_kubelet_arg` (deprecated `--image-gc-*` / `--eviction-*` flags, warnings on every kubelet start, slated for removal upstream) to `rke2_kubelet_config` with the same values; `rke2_kubelet_arg` now defaults to `[]`. Inventories that set `rke2_kubelet_arg` themselves keep working (flags win), but should migrate: clear the flags and fill `rke2_kubelet_config` in the same run, then check `/api/v1/nodes/<node>/proxy/configz`. Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
+
 ## [1.4.4] - 2026-09-01
 
 ### Fixed

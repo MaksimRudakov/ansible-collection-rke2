@@ -12,6 +12,12 @@
     rke2_first_server: true
     rke2_no_log: false
     rke2_sysctl_params: []  # not writable inside a container
+    # Config-only field (no flag exists): proves the drop-in is loaded by
+    # kubelet and merged over 00-rke2-defaults.conf (which sets it to 0s)
+    rke2_kubelet_config:
+      imageMaximumGCAge: 168h
+      evictionHard:
+        memory.available: 123Mi
     rke2_manifests:
       - name: molecule-test-cm
         content:

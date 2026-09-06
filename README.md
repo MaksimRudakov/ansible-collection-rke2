@@ -97,13 +97,30 @@ Canonical variable reference: [`roles/node/meta/argument_specs.yml`](roles/node/
 | Installation & air-gap | `rke2_version`, `rke2_airgap` + `rke2_mirror_base` + `rke2_airgap_url_rewrites`, `rke2_install_method`, `rke2_binary_search_paths`, `rke2_allow_downgrade` |
 | Topology & API access | `rke2_server_url`, `rke2_token`, `rke2_tls_san`, `rke2_servers_group` / `rke2_first_server` |
 | Networking & CNI | `rke2_cni`, `rke2_disable_kube_proxy` (derived), `rke2_cluster_cidr`, `rke2_service_cidr`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests` |
-| Node classes | `rke2_node_labels`, `rke2_node_taints`, `rke2_node_roles` (ROLES column via kubectl — kubelet may not self-assign those), `rke2_kubelet_arg`, per-component args |
+| Node classes | `rke2_node_labels`, `rke2_node_taints`, `rke2_node_roles` (ROLES column via kubectl — kubelet may not self-assign those), `rke2_kubelet_config` (KubeletConfiguration drop-in), `rke2_kubelet_arg`, per-component args |
 | Registries | `rke2_registry_mirrors`, `rke2_registry_configs` |
 | etcd | `rke2_etcd_snapshot_schedule_cron` / `_retention` / `_dir`, `rke2_etcd_expose_metrics` |
 | Security | `rke2_cis_profile` (the role provisions the etcd user and CIS sysctl automatically), `rke2_write_kubeconfig_mode`, `rke2_no_log` |
 | Day-2 plumbing | `rke2_kubectl_delegate`, `rke2_node_name`, `rke2_drain_timeout`, `rke2_ready_timeout` |
 
 Every variable is demonstrated with commentary in [`examples/inventory/group_vars/rke2_cluster.yml`](examples/inventory/group_vars/rke2_cluster.yml).
+
+## Kubelet tuning
+
+Image GC, eviction, reserved resources and any other `KubeletConfiguration` field go through `rke2_kubelet_config`. The role writes it as a drop-in (`10-ansible.conf`) into the `--config-dir` RKE2 already passes to kubelet, next to its own `00-rke2-defaults.conf`. Files apply in lexical order: maps merge by key, scalars override, keys set by RKE2 can be overridden but not removed. The default is a production image GC + eviction profile; extend or replace it per node class:
+
+```yaml
+rke2_kubelet_config:
+  imageGCHighThresholdPercent: 75
+  imageGCLowThresholdPercent: 60
+  imageMaximumGCAge: 168h        # no flag equivalent — config-only
+  evictionHard:
+    memory.available: 500Mi
+    nodefs.available: 10%
+    imagefs.available: 10%
+```
+
+`rke2_kubelet_arg` stays for flags that have no config-file counterpart (`node-ip`, ...). The image-gc/eviction/reserved flags are deprecated upstream and, more importantly, a flag silently overrides the same field in every drop-in — the role refuses a setting present in both places. Migrating an existing cluster: clear the flags and fill `rke2_kubelet_config` in the same `reconfig` run, and check `/api/v1/nodes/<node>/proxy/configz` afterwards. Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
 
 ## CNI
 
