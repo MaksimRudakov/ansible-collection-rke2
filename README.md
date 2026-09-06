@@ -120,7 +120,7 @@ rke2_kubelet_config:
     imagefs.available: 10%
 ```
 
-`rke2_kubelet_arg` stays for flags that have no config-file counterpart (`node-ip`, ...). The image-gc/eviction/reserved flags are deprecated upstream and, more importantly, a flag silently overrides the same field in every drop-in — the role refuses a setting present in both places. Migrating an existing cluster: clear the flags and fill `rke2_kubelet_config` in the same `reconfig` run, and check `/api/v1/nodes/<node>/proxy/configz` afterwards. Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
+`rke2_kubelet_arg` stays for flags that have no config-file counterpart (`node-ip`, ...). The image-gc/eviction/reserved flags are deprecated upstream and, more importantly, a flag silently overrides the same field in every drop-in — the role refuses a setting present in both places. **Upgrading from a release before 1.5.0:** inventories that copied the old flag-based profile into `rke2_kubelet_arg` fail on that guard until migrated. To unblock immediately without touching the cluster set `rke2_kubelet_config: {}`; to migrate, move the values to `rke2_kubelet_config`, set `rke2_kubelet_arg: []` and run `reconfig` once (one restart per node, no intermediate state), checking `/api/v1/nodes/<node>/proxy/configz` after each node. Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
 
 ## CNI
 

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-06
+
+### Fixed
+- Changelog and README for 1.5.0 claimed that inventories setting `rke2_kubelet_arg` themselves "keep working". They do not: the new non-empty default `rke2_kubelet_config` overlaps with the GC/eviction flags most inventories copied from the old role default, and the conflict guard fails the role. The 1.5.0 entry below now states the breaking change and both ways out. No code changes.
+
 ## [1.5.0] - 2026-09-06
 
 ### Added
@@ -13,7 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Guard against a kubelet setting present both as a flag in `rke2_kubelet_arg` and as a field in `rke2_kubelet_config`: the flag silently overrides every drop-in, so the role fails instead of leaving a dead-weight config.
 
 ### Changed
-- Default kubelet image GC / eviction profile moved from `rke2_kubelet_arg` (deprecated `--image-gc-*` / `--eviction-*` flags, warnings on every kubelet start, slated for removal upstream) to `rke2_kubelet_config` with the same values; `rke2_kubelet_arg` now defaults to `[]`. Inventories that set `rke2_kubelet_arg` themselves keep working (flags win), but should migrate: clear the flags and fill `rke2_kubelet_config` in the same run, then check `/api/v1/nodes/<node>/proxy/configz`. Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
+- Default kubelet image GC / eviction profile moved from `rke2_kubelet_arg` (deprecated `--image-gc-*` / `--eviction-*` flags, warnings on every kubelet start, slated for removal upstream) to `rke2_kubelet_config` with the same values; `rke2_kubelet_arg` now defaults to `[]`. **BREAKING for inventories that set GC/eviction flags in `rke2_kubelet_arg`** (typically a copy of the old role default): those fields overlap with the new default `rke2_kubelet_config`, so the conflict guard fails the role before touching the node. Two ways out:
+  - immediate, no cluster impact: `rke2_kubelet_config: {}` in group_vars — the guard passes, no drop-in is written, no restart (the removal task is a no-op on nodes that never had one);
+  - migration: move the flag values to `rke2_kubelet_config`, set `rke2_kubelet_arg: []` (keep only flags without a config-file field such as `node-ip`) and run `reconfig` once — both files land on disk before the single per-node restart, no intermediate state; check `/api/v1/nodes/<node>/proxy/configz` after each node.
+
+  Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
 
 ## [1.4.4] - 2026-09-01
 
