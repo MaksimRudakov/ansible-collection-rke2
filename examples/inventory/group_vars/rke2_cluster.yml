@@ -120,6 +120,17 @@ rke2_kubelet_config:
 # rke2_kubelet_arg:
 #   - "node-ip=<NODE_IP>"
 
+# --- Monitoring ----------------------------------------------------------------
+
+# controller-manager / scheduler listen on 127.0.0.1 by default; in-cluster
+# Prometheus cannot scrape them (KubeControllerManagerDown / KubeSchedulerDown).
+# Opt-in — conflicts with CIS 1.3.7 / 1.4.2, do not combine with rke2_cis_profile
+# rke2_kube_controller_manager_arg:
+#   - terminated-pod-gc-threshold=12500
+#   - bind-address=0.0.0.0
+# rke2_kube_scheduler_arg:
+#   - bind-address=0.0.0.0
+
 # --- etcd -----------------------------------------------------------------------
 
 # Snapshots: empty = RKE2 defaults (cron "0 */12 * * *", retention 5).

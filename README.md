@@ -142,6 +142,20 @@ rke2_kubelet_config:
 
 `rke2_kubelet_arg` stays for flags that have no config-file counterpart (`node-ip`, ...). The image-gc/eviction/reserved flags are deprecated upstream and, more importantly, a flag silently overrides the same field in every drop-in — the role refuses a setting present in both places. **Upgrading from a release before 1.5.0:** inventories that copied the old flag-based profile into `rke2_kubelet_arg` fail on that guard until migrated. To unblock immediately without touching the cluster set `rke2_kubelet_config: {}`; to migrate, move the values to `rke2_kubelet_config`, set `rke2_kubelet_arg: []` and run `reconfig` once (one restart per node, no intermediate state), checking `/api/v1/nodes/<node>/proxy/configz` after each node. Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
 
+## Monitoring control-plane components
+
+RKE2 binds `kube-controller-manager` (`:10257`) and `kube-scheduler` (`:10259`) to `127.0.0.1`, so a Prometheus running in the cluster (kube-prometheus-stack ServiceMonitors) cannot reach them and `KubeControllerManagerDown` / `KubeSchedulerDown` fire. etcd metrics are exposed already (`rke2_etcd_expose_metrics: true`). To expose the other two, override the component args in group_vars of the servers:
+
+```yaml
+rke2_kube_controller_manager_arg:
+  - terminated-pod-gc-threshold=12500   # keep the role default
+  - bind-address=0.0.0.0
+rke2_kube_scheduler_arg:
+  - bind-address=0.0.0.0
+```
+
+Apply with `reconfig` (rolling, `serial: 1` on servers). Deliberately not the default: the endpoints stay behind TLS and authentication, but CIS Benchmark 1.3.7 / 1.4.2 require `127.0.0.1`, so do not combine this with `rke2_cis_profile: cis` on a cluster that has to pass a CIS scan — restrict access to those ports on the host firewall instead.
+
 ## CNI
 
 `rke2_cni` accepts anything RKE2 supports: `cilium` (default), `canal`, `calico`, `none`, `multus,cilium`, ... `rke2_disable_kube_proxy` is derived automatically — `true` only for Cilium (kube-proxy replacement), any other CNI keeps kube-proxy instead of silently losing service routing.

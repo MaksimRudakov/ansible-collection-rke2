@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 - README: "Adding a node" section — `deploy --limit <NEW_NODE>` and why token/URL derivation over delegation works outside the limit; the node role README points to it.
+- README "Monitoring control-plane components": opt-in `bind-address=0.0.0.0` for kube-controller-manager / kube-scheduler via `rke2_kube_controller_manager_arg` / `rke2_kube_scheduler_arg` so in-cluster Prometheus can scrape them (`KubeControllerManagerDown` / `KubeSchedulerDown`), with the CIS 1.3.7 / 1.4.2 caveat; same block commented in the example inventory. Role defaults stay on `127.0.0.1`.
 
 ## [1.5.1] - 2026-09-06
 
