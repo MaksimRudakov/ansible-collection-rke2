@@ -20,3 +20,5 @@
   when:
     - rke2_server_url_wait | bool
     - rke2_server_url | length > 0
+    # in --check nothing was started, so the endpoint may legitimately be down
+    - not ansible_check_mode
