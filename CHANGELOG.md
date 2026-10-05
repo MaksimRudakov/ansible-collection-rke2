@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-05
+
 ### Added
 - Wait for the registration endpoint: when `rke2_server_url` is set, the role waits for TCP connect on it before a node joins and after the first server bootstraps (`rke2_server_url_wait`, `rke2_server_url_wait_timeout`, default 300s). A kube-vip VIP delivered through `rke2_manifests`, a load balancer or a DNS RR record comes up well after the bootstrap server itself; joiners started earlier spun on connection retries and failed with an opaque `rke2_api_wait_timeout`. New entry point `wait_server_url` for custom playbooks. Skipped in `--check` (nothing was started, so the endpoint may legitimately be down). Verified on a 3-server stand with a kube-vip ARP VIP: single `deploy` run without a manual pause, re-run `changed=0`.
 

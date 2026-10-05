@@ -1,7 +1,7 @@
 ---
 namespace: maksimrudakov
 name: rke2
-version: 1.5.2
+version: 1.6.0
 readme: README.md
 authors:
   - Maxim Rudakov
