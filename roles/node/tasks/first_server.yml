@@ -25,3 +25,8 @@
   ansible.builtin.wait_for:
     port: 6443
     timeout: "{{ rke2_api_wait_timeout }}"
+
+# Bootstrap is complete only when the cluster answers on its own address:
+# with an explicit rke2_server_url (VIP) the joiners that follow depend on it
+- name: Wait for the registration endpoint to serve
+  ansible.builtin.include_tasks: wait_server_url.yml

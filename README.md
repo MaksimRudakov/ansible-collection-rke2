@@ -75,7 +75,7 @@ Fully annotated examples distilled from a real multi-cluster stand:
 - [`examples/inventory/`](examples/inventory/) — static inventory: HA control plane, node classes, production-grade group_vars with commentary on every decision
 - [`examples/inventory-kubevirt/`](examples/inventory-kubevirt/) — dynamic inventory (KubeVirt/Harvester): VM labels → collection groups
 
-For production set a stable `rke2_server_url` (DNS RR / VIP) in group_vars; the bootstrap server ignores it during initial bootstrap.
+For production set a stable `rke2_server_url` (DNS RR / VIP) in group_vars; the bootstrap server ignores it during initial bootstrap. The role waits for that address to accept connections before any node joins and before the bootstrap play finishes — a kube-vip VIP (DaemonSet from `rke2_manifests`), a load balancer or a DNS record typically comes up a minute or so after the first server itself, and joiners started earlier would spin on retries until an opaque timeout. `rke2_server_url_wait_timeout` (300s) / `rke2_server_url_wait: false` to tune or skip; the wait is skipped in `--check`. Note for kube-vip: `rke2-uninstall.sh` does not remove the VIP from the interface of the node that held it — after `remove_node` / `uninstall` of such a server check `ip addr` and drop the stale address, or the next bootstrap will see a VIP that answers from a dead node.
 
 ## Dynamic inventories
 
@@ -115,7 +115,7 @@ Canonical variable reference: [`roles/node/meta/argument_specs.yml`](roles/node/
 | Area | Variables |
 |------|-----------|
 | Installation & air-gap | `rke2_version`, `rke2_airgap` + `rke2_mirror_base` + `rke2_airgap_url_rewrites`, `rke2_install_method`, `rke2_binary_search_paths`, `rke2_allow_downgrade` |
-| Topology & API access | `rke2_server_url`, `rke2_token`, `rke2_tls_san`, `rke2_servers_group` / `rke2_first_server` |
+| Topology & API access | `rke2_server_url` (+ `rke2_server_url_wait` / `_timeout`), `rke2_token`, `rke2_tls_san`, `rke2_servers_group` / `rke2_first_server` |
 | Networking & CNI | `rke2_cni`, `rke2_disable_kube_proxy` (derived), `rke2_cluster_cidr`, `rke2_service_cidr`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests` |
 | Node classes | `rke2_node_labels`, `rke2_node_taints`, `rke2_node_roles` (ROLES column via kubectl — kubelet may not self-assign those), `rke2_kubelet_config` (KubeletConfiguration drop-in), `rke2_kubelet_arg`, per-component args |
 | Registries | `rke2_registry_mirrors`, `rke2_registry_configs` |
@@ -204,7 +204,7 @@ Empty `fleet_gitrepo_token` — public repo, no secret. `-t gitrepo` re-applies 
 
 ## Day-2 helpers (role entry points)
 
-For custom playbooks, `maksimrudakov.rke2.node` exposes reusable task files — `token`, `cordon`, `drain`, `uncordon`, `stop`, `start`, `node_roles`, `delete_node`, `uninstall`, `wait_ready`, `rotate_certs`, `config`:
+For custom playbooks, `maksimrudakov.rke2.node` exposes reusable task files — `token`, `cordon`, `drain`, `uncordon`, `stop`, `start`, `node_roles`, `delete_node`, `uninstall`, `wait_ready`, `wait_server_url`, `rotate_certs`, `config`:
 
 ```yaml
 - name: Drain node before maintenance

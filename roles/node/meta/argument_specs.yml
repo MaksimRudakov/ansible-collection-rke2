@@ -33,6 +33,18 @@ argument_specs:
         description: >-
           Registration URL (https://<host>:9345). Empty — derived from the
           bootstrap host. Prefer a stable DNS RR / VIP address in production.
+      rke2_server_url_wait:
+        type: bool
+        default: true
+        description: >-
+          Wait for TCP connect on rke2_server_url before a node joins and
+          after the first server bootstraps. Covers a VIP (kube-vip), a load
+          balancer or a DNS RR record that comes up after the bootstrap
+          server itself. No-op when rke2_server_url is empty.
+      rke2_server_url_wait_timeout:
+        type: int
+        default: 300
+        description: Seconds to wait for rke2_server_url to accept connections.
       rke2_token:
         type: str
         default: ""

@@ -24,6 +24,7 @@ Besides `main`, the role exposes task files for custom day-2 playbooks via `incl
 | `delete_node` | Delete the Node object via kubectl (etcd member removed automatically for servers) |
 | `uninstall` | Wipe RKE2 from the host (`rke2-uninstall.sh` + leftover dirs); drain/delete the Node first |
 | `wait_ready` | Wait for the Node object to become Ready |
+| `wait_server_url` | Wait for `rke2_server_url` (VIP / LB / DNS) to accept connections |
 | `rotate_certs` | Remove kube-apiserver serving certs for regeneration |
 
 ## License

@@ -21,6 +21,12 @@ rke2_first_server: "{{ rke2_bootstrap_host == inventory_hostname }}"
 rke2_server_url: ""
 rke2_token: ""
 
+# Before a node joins — and after the first server bootstraps — wait for TCP
+# connect on rke2_server_url. Covers a VIP (kube-vip), a load balancer or a
+# DNS RR record that comes up after the bootstrap server itself
+rke2_server_url_wait: true
+rke2_server_url_wait_timeout: 300
+
 # --- Paths and cluster access -------------------------------------------------
 
 rke2_data_dir: /var/lib/rancher/rke2

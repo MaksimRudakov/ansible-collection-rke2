@@ -4,7 +4,9 @@
 #
 # 1. Node is alive (graceful): cordon → drain → delete the Node object
 #    (for servers the etcd member is removed automatically) → wipe RKE2
-#    from the host with rke2-uninstall.sh.
+#    from the host with rke2-uninstall.sh. kube-vip users: the VIP address
+#    stays on the interface of the server that held it (rke2-uninstall.sh
+#    does not know about it) — remove it by hand before reusing the host.
 #      ansible-playbook maksimrudakov.rke2.remove_node -i inventory/<env>/ \
 #        -e rke2_remove_hosts=worker-03
 #    rke2_remove_hosts accepts any Ansible host pattern. When removing the
