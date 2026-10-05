@@ -17,6 +17,10 @@ rke2_version: "v1.35.6+rke2r1"
 # auto-derived first-master IP. The bootstrap server ignores it during the
 # initial bootstrap, so it is safe to set cluster-wide from day one
 rke2_server_url: "https://<RKE2_API_FQDN>:9345"
+# Nodes wait for that address to accept connections before joining (and the
+# bootstrap server before finishing) — a kube-vip VIP / LB / DNS record comes
+# up after the first server itself. Raise for slow VIP failover, false to skip
+# rke2_server_url_wait_timeout: 300
 
 # Extra SANs for the apiserver certificate (VIP/FQDN). After changing —
 # run the rotate_certs playbook

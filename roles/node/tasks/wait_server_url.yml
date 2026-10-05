@@ -1,0 +1,22 @@
+---
+# The registration endpoint (rke2_server_url) is often a VIP (kube-vip),
+# a load balancer or a DNS RR record that comes up seconds to minutes after
+# the bootstrap server itself: kube-vip is a DaemonSet from the manifests
+# dir and needs scheduling + leader election + ARP before the VIP answers.
+# Joining nodes started before that spin on connection retries and end in an
+# opaque rke2_api_wait_timeout. Wait for TCP connect on the endpoint instead
+# — from the node that is about to use it. The role knows nothing about
+# what serves the address
+- name: Wait for the cluster registration endpoint
+  ansible.builtin.wait_for:
+    host: "{{ rke2_server_url | urlsplit('hostname') }}"
+    port: "{{ rke2_server_url | urlsplit('port') | default(9345, true) }}"
+    timeout: "{{ rke2_server_url_wait_timeout }}"
+    msg: >-
+      {{ rke2_server_url }} is not reachable after
+      {{ rke2_server_url_wait_timeout }}s: the VIP / load balancer / DNS record
+      in front of the control plane is not serving yet. Set
+      rke2_server_url_wait: false to skip this check
+  when:
+    - rke2_server_url_wait | bool
+    - rke2_server_url | length > 0
