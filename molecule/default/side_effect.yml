@@ -53,7 +53,8 @@
   vars:
     fleet_version: "110.0.0+up0.16.0"
     fleet_gitrepo_enabled: false
-    fleet_helm_bin: /opt/molecule-no-helm/helm
+    # existing directory, absent file: copy checks the parent dir even in check mode
+    fleet_helm_bin: /usr/local/bin/helm-molecule-absent
   roles:
     - role: maksimrudakov.rke2.fleet
 
