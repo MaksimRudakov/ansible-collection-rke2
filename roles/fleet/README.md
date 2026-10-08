@@ -26,6 +26,20 @@ Full list with types and descriptions: [`meta/argument_specs.yml`](meta/argument
 
 An empty `fleet_gitrepo_token` skips the secret and applies the `GitRepo` without `clientSecretName` (public repository).
 
+## Rancher Manager on top
+
+Fleet can be installed standalone **before** Rancher Manager — to roll out what Rancher itself needs (load balancer, cert-manager, ingress) — and handed over when Rancher is installed. Rancher then helm-upgrades `fleet`/`fleet-crd` with its own values and moves the local-cluster agent to `cattle-fleet-local-system`. Two things make the handover clean:
+
+```yaml
+fleet_version: "110.0.2+up0.16.2"            # = fleetVersion in build.yaml of your Rancher release
+fleet_agent_namespace: cattle-fleet-local-system
+```
+
+- **`fleet_agent_namespace`** — the agent namespace is also its `AGENT_SCOPE`, and the scope is part of the ownership id (`objectset.rio.cattle.io/id`) of every object Fleet deploys. With the chart default (empty scope) every object deployed before Rancher becomes "not owned by us" after the handover: bundles go `Modified`, nothing is applied any more. Set it from the start; changing it on a cluster with deployed bundles causes exactly that.
+- **`fleet_version`** equal to the Fleet bundled with Rancher — the takeover then is a same-version upgrade.
+
+After the handover the role leaves the charts alone (`fleet_rancher_managed: auto` finds `cattle-system/rancher`) and only applies the GitRepo — upgrade Fleet together with Rancher.
+
 ## Tags
 
 | Tag | Purpose |

@@ -37,6 +37,8 @@
   vars:
     fleet_version: "110.0.0+up0.16.0"  # pin = idempotent re-runs; bump deliberately
     fleet_gitrepo_enabled: false
+    # Rancher-compatible agent scope (verified in verify.yml)
+    fleet_agent_namespace: cattle-fleet-local-system
   pre_tasks:
     - name: Wait for node Ready (fleet pods need a schedulable node)
       ansible.builtin.command:

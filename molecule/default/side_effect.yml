@@ -40,5 +40,69 @@
   vars:
     fleet_version: "110.0.0+up0.16.0"
     fleet_gitrepo_enabled: false
+    fleet_agent_namespace: cattle-fleet-local-system
   roles:
     - role: maksimrudakov.rke2.fleet
+
+# Fresh node in check mode: helm download runs (check_mode: false), the copy
+# into fleet_helm_bin is held — chart steps must be skipped, not fail
+- name: Fleet role in check mode without helm
+  hosts: all
+  become: true
+  check_mode: true
+  vars:
+    fleet_version: "110.0.0+up0.16.0"
+    fleet_gitrepo_enabled: false
+    fleet_helm_bin: /opt/molecule-no-helm/helm
+  roles:
+    - role: maksimrudakov.rke2.fleet
+
+# Rancher Manager owns Fleet after its install: even a forced upgrade must not
+# touch the charts. A scaled-to-zero Deployment named rancher is enough for
+# the auto-detection
+- name: Fleet role leaves Rancher-owned charts alone
+  hosts: all
+  become: true
+  vars:
+    kubectl: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
+  tasks:
+    - name: Read fleet release revision before
+      ansible.builtin.command:
+        cmd: /usr/local/bin/helm --kubeconfig /etc/rancher/rke2/rke2.yaml status fleet -n cattle-fleet-system -o json
+      register: fleet_rev_before
+      changed_when: false
+
+    - name: Create a fake Rancher deployment
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          {{ kubectl }} create namespace cattle-system --dry-run=client -o yaml | {{ kubectl }} apply -f -
+          {{ kubectl }} -n cattle-system create deployment rancher --image=registry.k8s.io/pause:3.10 --replicas=0
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Run the fleet role with a forced upgrade
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.fleet
+      vars:
+        fleet_version: "110.0.0+up0.16.0"
+        fleet_force_upgrade: true
+        fleet_gitrepo_enabled: false
+        fleet_agent_namespace: cattle-fleet-local-system
+
+    - name: Read fleet release revision after
+      ansible.builtin.command:
+        cmd: /usr/local/bin/helm --kubeconfig /etc/rancher/rke2/rke2.yaml status fleet -n cattle-fleet-system -o json
+      register: fleet_rev_after
+      changed_when: false
+
+    - name: Assert the release was not upgraded
+      ansible.builtin.assert:
+        that:
+          - fleet_rancher_present | bool
+          - (fleet_rev_after.stdout | from_json).version == (fleet_rev_before.stdout | from_json).version
+
+    - name: Remove the fake Rancher deployment
+      ansible.builtin.command:
+        cmd: "{{ kubectl }} -n cattle-system delete deployment rancher"
+      changed_when: true

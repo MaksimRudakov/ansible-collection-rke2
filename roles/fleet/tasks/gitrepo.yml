@@ -78,3 +78,29 @@
         state: absent
       when: fleet_gitrepo_tmp.path is defined
       changed_when: false
+
+- name: Force GitRepo resync
+  when: fleet_gitrepo_force_sync
+  block:
+    - name: Read current forceSyncGeneration
+      check_mode: false
+      ansible.builtin.command:
+        cmd: >-
+          {{ fleet_kubectl_bin }} get gitrepo {{ fleet_gitrepo_name }}
+          --namespace {{ fleet_gitrepo_namespace }}
+          --output jsonpath={.spec.forceSyncGeneration}
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      register: fleet_gitrepo_sync_gen
+      changed_when: false
+
+    - name: Bump forceSyncGeneration
+      ansible.builtin.command:
+        cmd: >-
+          {{ fleet_kubectl_bin }} patch gitrepo {{ fleet_gitrepo_name }}
+          --namespace {{ fleet_gitrepo_namespace }}
+          --type merge
+          --patch '{"spec":{"forceSyncGeneration":{{ (fleet_gitrepo_sync_gen.stdout | default('0', true) | int) + 1 }}}}'
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      changed_when: true

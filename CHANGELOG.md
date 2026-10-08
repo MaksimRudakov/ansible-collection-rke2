@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- `fleet` role: `fleet_agent_namespace` — local-cluster agent namespace/`AGENT_SCOPE` (`bootstrap.agentNamespace`); set `cattle-fleet-local-system` when Rancher Manager will take Fleet over, otherwise every object deployed before Rancher becomes "not owned by us".
+- `fleet` role: `fleet_rancher_managed` (`auto`/`true`/`false`) — the chart install is skipped once Rancher Manager owns Fleet (auto: `cattle-system/rancher` exists); the GitRepo part still runs.
+- `fleet` role: `fleet_gitrepo_force_sync` — bump `forceSyncGeneration` to redeploy a stalled GitRepo.
+
+### Fixed
+
+- `fleet` role: `--check` on a node without helm no longer fails on `helm repo add` — chart steps are skipped with a notice.
+- `fleet` role: the GitRepo auth secret is rendered as `data` instead of `stringData` — `kubectl apply` no longer reports it changed on every run.
+- Docs: the testing instructions exported the checkout's own collections root before `molecule test` — molecule's `ansible-galaxy collection install --force` into that path deletes the checkout. README, CONTRIBUTING and CLAUDE.md now use a throwaway first path and carry a warning.
+
 ## [1.6.0] - 2026-10-05
 
 ### Added

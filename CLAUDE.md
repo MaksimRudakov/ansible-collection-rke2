@@ -12,6 +12,11 @@ Ansible collection `maksimrudakov.rke2`: deploys and operates RKE2 Kubernetes cl
 yamllint .
 ansible-lint                # production profile; skip-list in .ansible-lint
 
+# DANGER: molecule installs the project with `ansible-galaxy collection install --force` into the FIRST
+# ANSIBLE_COLLECTIONS_PATH entry — if that is the collections root of this checkout, it deletes the
+# checkout (.git included). Always put a throwaway dir first:
+export ANSIBLE_COLLECTIONS_PATH=$(mktemp -d):$HOME/.ansible/collections
+
 molecule test -s airgap     # fast: mock mirror, URL rewrites, downgrade guard (no real RKE2)
 molecule test               # full: real single-node RKE2 bootstrap in a privileged container
 molecule test -s ha         # 1 server + 1 agent via the real deploy playbook; NOT in CI,

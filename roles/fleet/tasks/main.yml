@@ -1,9 +1,17 @@
 ---
+- name: Detect Rancher Manager
+  ansible.builtin.include_tasks:
+    file: rancher.yml
+    apply:
+      tags: [install]
+  tags: [install]
+
 - name: Install Fleet standalone
   ansible.builtin.include_tasks:
     file: install.yml
     apply:
       tags: [install]
+  when: not (fleet_rancher_present | default(false) | bool)
   tags: [install]
 
 - name: Configure Fleet GitRepo
