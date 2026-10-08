@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+- Graceful node shutdown: `rke2_shutdown_grace_period` / `rke2_shutdown_grace_period_critical_pods` (seconds, default 0 = off) configure kubelet `shutdownGracePeriod*` through the kubelet drop-in **and** pin systemd-logind `InhibitDelayMaxSec` in `zz-rke2-kubelet-shutdown.conf` (`rke2_logind_conf_path`). kubelet's own `99-kubelet.conf` loses to later-sorting distro drop-ins (Ubuntu `unattended-upgrades-logind-maxdelay.conf` = 30s) and systemd < 254 ignores kubelet's SIGHUP — the node shutdown manager then fails at startup and graceful shutdown is silently off. The role reloads logind (SIGHUP on systemd ≥ 254, restart below) before kubelet starts or restarts, refuses `shutdownGracePeriod*` set directly in `rke2_kubelet_config`, and after start / `reconfig` asserts the inhibitor is present in `systemd-inhibit --list` (`rke2_shutdown_verify_inhibitor`, entry point `shutdown_check`). `uninstall` removes both logind drop-ins.
+
 ## [1.7.0] - 2026-10-08
 
 ### Added

@@ -16,6 +16,9 @@
     rke2_sysctl_params: []  # not writable inside a container
     # Config-only field (no flag exists): proves the drop-in is loaded by
     # kubelet and merged over 00-rke2-defaults.conf (which sets it to 0s)
+    # graceful shutdown: kubelet fields + logind drop-in from one pair of vars
+    rke2_shutdown_grace_period: 90
+    rke2_shutdown_grace_period_critical_pods: 30
     rke2_kubelet_config:
       imageMaximumGCAge: 168h
       evictionHard:

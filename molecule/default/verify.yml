@@ -54,10 +54,55 @@
         that:
           - rke2_kubelet_cfg.imageMaximumGCAge == '168h0m0s'
           - rke2_kubelet_cfg.evictionHard['memory.available'] == '123Mi'
+          # graceful shutdown fields come from rke2_shutdown_grace_period*
+          - rke2_kubelet_cfg.shutdownGracePeriod == '1m30s'
+          - rke2_kubelet_cfg.shutdownGracePeriodCriticalPods == '30s'
           # RKE2 default keys survive next to ours: maps merge, not replace
           - rke2_kubelet_cfg.evictionHard['nodefs.available'] is defined
       vars:
         rke2_kubelet_cfg: "{{ (rke2_configz.stdout | from_json).kubeletconfig }}"
+
+    - name: Read the effective logind configuration
+      ansible.builtin.command:
+        cmd: systemd-analyze cat-config systemd/logind.conf
+      register: rke2_logind_effective
+      changed_when: false
+
+    # the last occurrence wins; the planted unattended-upgrades file (30)
+    # must lose to the role's zz- drop-in
+    - name: Assert the role's InhibitDelayMaxSec wins over the distro drop-in
+      ansible.builtin.assert:
+        that:
+          - rke2_logind_effective.stdout_lines
+            | select('match', '^InhibitDelayMaxSec=') | list | last == 'InhibitDelayMaxSec=90'
+          - "'unattended-upgrades-logind-maxdelay.conf' in rke2_logind_effective.stdout"
+        fail_msg: "{{ rke2_logind_effective.stdout_lines | select('search', 'InhibitDelayMaxSec|\\.conf') | list }}"
+
+    - name: Refuse shutdownGracePeriod set directly in rke2_kubelet_config (negative test)
+      block:
+        - name: Include config tasks with the duplicated field
+          ansible.builtin.include_role:
+            name: maksimrudakov.rke2.node
+            tasks_from: config
+          vars:
+            rke2_role: server
+            rke2_first_server: true
+            rke2_no_log: false
+            rke2_shutdown_grace_period: 90
+            rke2_kubelet_config:
+              shutdownGracePeriod: 2m
+
+        - name: Mark unexpected success
+          ansible.builtin.set_fact:
+            rke2_shutdown_guard_fired: false
+      rescue:
+        - name: Mark refusal
+          ansible.builtin.set_fact:
+            rke2_shutdown_guard_fired: true
+
+    - name: Assert the graceful shutdown guard fired
+      ansible.builtin.assert:
+        that: rke2_shutdown_guard_fired | default(false)
 
     - name: Check custom manifest applied by RKE2
       ansible.builtin.command:

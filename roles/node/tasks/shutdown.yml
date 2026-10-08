@@ -1,0 +1,61 @@
+---
+# Graceful node shutdown: logind side. The kubelet side (shutdownGracePeriod*
+# fields) is merged into the kubelet drop-in by config.yml from the same
+# variables, so there is exactly one source of truth
+- name: Validate graceful shutdown settings
+  ansible.builtin.assert:
+    that:
+      - rke2_shutdown_grace_period | int >= 0
+      - rke2_shutdown_grace_period_critical_pods | int >= 0
+      - >-
+        rke2_shutdown_grace_period | int == 0
+        or rke2_shutdown_grace_period_critical_pods | int < rke2_shutdown_grace_period | int
+      - "'shutdownGracePeriod' not in rke2_kubelet_config"
+      - "'shutdownGracePeriodCriticalPods' not in rke2_kubelet_config"
+    fail_msg: >-
+      Graceful shutdown is configured through rke2_shutdown_grace_period /
+      rke2_shutdown_grace_period_critical_pods (seconds, critical < total),
+      not through shutdownGracePeriod* in rke2_kubelet_config — the role must
+      align the systemd-logind inhibitor limit with the same value
+
+- name: Ensure logind drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ rke2_logind_conf_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: rke2_shutdown_grace_period | int > 0
+
+# zz- sorts after kubelet's own 99-kubelet.conf and after distro drop-ins
+# (unattended-upgrades-logind-maxdelay.conf); the last file wins. The distro
+# file is left alone so package upgrades cannot revert the fix
+- name: Deploy logind inhibitor limit for kubelet graceful shutdown
+  ansible.builtin.copy:
+    content: |
+      # Managed by maksimrudakov.rke2 — kubelet GracefulNodeShutdown needs
+      # InhibitDelayMaxSec >= shutdownGracePeriod; kubelet's 99-kubelet.conf
+      # loses to later-sorting drop-ins, this file does not
+      [Login]
+      InhibitDelayMaxSec={{ rke2_shutdown_grace_period }}
+    dest: "{{ rke2_logind_conf_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: rke2_logind_dropin
+  when: rke2_shutdown_grace_period | int > 0
+
+- name: Remove logind inhibitor limit when graceful shutdown is off
+  ansible.builtin.file:
+    path: "{{ rke2_logind_conf_path }}"
+    state: absent
+  register: rke2_logind_dropin_removed
+  when: rke2_shutdown_grace_period | int == 0
+
+# Inline rather than a handler: logind must hold the new limit before kubelet
+# starts (first install) or restarts (Restart rke2 handler), otherwise the
+# node shutdown manager fails its startup check and graceful shutdown is
+# silently off
+- name: Reload systemd-logind after the drop-in changed
+  ansible.builtin.include_tasks: logind_reload.yml
+  when: rke2_logind_dropin is changed or rke2_logind_dropin_removed is changed

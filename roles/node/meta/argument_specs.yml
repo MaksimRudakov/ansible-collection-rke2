@@ -229,6 +229,36 @@ argument_specs:
         description: >-
           Drop-in file name without .conf; must sort after
           00-rke2-defaults.conf.
+      rke2_shutdown_grace_period:
+        type: int
+        default: 0
+        description: >-
+          kubelet GracefulNodeShutdown window in seconds (shutdownGracePeriod),
+          0 = off. The role also writes the matching systemd-logind
+          InhibitDelayMaxSec drop-in (rke2_logind_conf_path) and reloads
+          logind, otherwise distro drop-ins (Ubuntu unattended-upgrades, 30s)
+          or systemd < 254 silently disable the feature. Do not set
+          shutdownGracePeriod* in rke2_kubelet_config.
+      rke2_shutdown_grace_period_critical_pods:
+        type: int
+        default: 0
+        description: >-
+          Seconds at the end of the window reserved for critical pods
+          (shutdownGracePeriodCriticalPods); must be less than
+          rke2_shutdown_grace_period.
+      rke2_logind_conf_path:
+        type: str
+        default: /etc/systemd/logind.conf.d/zz-rke2-kubelet-shutdown.conf
+        description: >-
+          logind drop-in written by the role; must sort after kubelet's
+          99-kubelet.conf and after distro drop-ins.
+      rke2_shutdown_verify_inhibitor:
+        type: bool
+        default: true
+        description: >-
+          After start/reconfig assert that kubelet registered the shutdown
+          inhibitor (systemd-inhibit --list). Disable where logind is not
+          usable, e.g. containers.
       rke2_kube_apiserver_arg:
         type: list
         elements: str

@@ -22,3 +22,20 @@
   loop:
     - /etc/rancher/rke2
     - "{{ rke2_data_dir }}"
+
+# kubelet's own logind drop-in survives rke2-uninstall.sh; together with the
+# role's zz- file it would keep a stale InhibitDelayMaxSec on the host
+- name: Remove logind drop-ins left by kubelet graceful shutdown
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ rke2_logind_conf_path }}"
+    - /etc/systemd/logind.conf.d/99-kubelet.conf
+  register: rke2_logind_cleanup
+
+# inline on purpose: the host is being wiped, nothing later in the play
+# would flush a handler
+- name: Reload systemd-logind after removing the drop-ins  # noqa: no-handler
+  ansible.builtin.include_tasks: logind_reload.yml
+  when: rke2_logind_cleanup is changed
