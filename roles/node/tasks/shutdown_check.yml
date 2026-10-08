@@ -8,11 +8,14 @@
     - rke2_shutdown_verify_inhibitor | bool
     - not ansible_check_mode
   block:
+    # read-only probe: runs under a play-level check_mode too (molecule
+    # side_effect); a real --check is excluded by the when below
     - name: Wait for the kubelet shutdown inhibitor
       ansible.builtin.command:
         cmd: systemd-inhibit --list --no-pager --no-legend
       register: rke2_inhibitors
       changed_when: false
+      check_mode: false
       retries: 6
       delay: 5
       until: rke2_inhibitors.stdout is search('kubelet.*shutdown.*delay')
