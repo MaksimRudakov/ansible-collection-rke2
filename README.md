@@ -200,6 +200,8 @@ fleet_gitrepo_token: "{{ vault_fleet_git_token }}"
 fleet_gitrepo_paths: [clusters/prod]
 ```
 
+Planning Rancher Manager on the same cluster later? Install Fleet with `fleet_agent_namespace: cattle-fleet-local-system` and `fleet_version` equal to the Fleet bundled with that Rancher release — see [Rancher Manager on top](roles/fleet/README.md#rancher-manager-on-top); once Rancher is there the role stops touching the charts (`fleet_rancher_managed: auto`). `fleet_gitrepo_force_sync: true` redeploys the current commit of a stalled GitRepo.
+
 Empty `fleet_gitrepo_token` — public repo, no secret. `-t gitrepo` re-applies only the GitRepo (paths, token rotation). Re-runs with a pinned `fleet_version` are idempotent; a version bump in group_vars is the upgrade path. When uninstalling, delete GitRepos and let bundles clean up **before** removing the controller (see [TESTING.md](TESTING.md)). Variables: [`roles/fleet/meta/argument_specs.yml`](roles/fleet/meta/argument_specs.yml).
 
 ## Day-2 helpers (role entry points)
@@ -222,10 +224,13 @@ Full table with per-entry-point notes: [`roles/node/README.md`](roles/node/READM
 ## Testing
 
 ```bash
-export ANSIBLE_COLLECTIONS_PATH=<path-to>/collections
+export ANSIBLE_COLLECTIONS_PATH=$(mktemp -d):$HOME/.ansible/collections   # NOT the checkout's collections root
 molecule test -s airgap    # fast: mock mirror, URL rewrites, downgrade guard
 molecule test              # full: single-node RKE2 + Fleet in a privileged container
 ```
+
+> [!CAUTION]
+> Never run `molecule` with the checkout's own `collections` root **first** in `ANSIBLE_COLLECTIONS_PATH`. Molecule (ansible-compat `prepare_environment`) installs the project with `ansible-galaxy collection install --force <project>` into the first collections path; if that is the root holding this checkout, `--force` deletes the checkout itself — `.git` and uncommitted work included. Put a throwaway directory first; the scenarios set their own path for the playbook runs (`${MOLECULE_PROJECT_DIRECTORY}/../../..`), so the code under test still comes from the checkout.
 
 Beyond molecule, every playbook and feature is verified end-to-end against real
 HA clusters (RKE2 v1.34/v1.35, Ubuntu 24.04, Cilium and Canal, CIS mode, rolling

@@ -22,9 +22,14 @@ ansible-galaxy collection install ansible.posix community.docker
 
 yamllint .
 ansible-lint                # production profile
+# for molecule the first collections path must NOT be ~/dev/collections (see below)
+export ANSIBLE_COLLECTIONS_PATH=$(mktemp -d):$HOME/.ansible/collections
 molecule test -s airgap     # fast: mock mirror, URL rewrites, downgrade guard
 molecule test               # full: real RKE2 bootstrap in a privileged container
 ```
+
+> [!CAUTION]
+> Never run `molecule` with the checkout's own `collections` root **first** in `ANSIBLE_COLLECTIONS_PATH`. Molecule (ansible-compat `prepare_environment`) installs the project with `ansible-galaxy collection install --force <project>` into the first collections path; if that is the root holding this checkout, `--force` deletes the checkout itself — `.git` and uncommitted work included. Put a throwaway directory first; the scenarios set their own path for the playbook runs (`${MOLECULE_PROJECT_DIRECTORY}/../../..`), so the code under test still comes from the checkout.
 
 The `default` scenario runs real RKE2 in docker and needs the quirks already encoded in the scenario: `/var/lib/rancher` volume, `mount --make-rshared /`, curl in prepare. Don't remove them.
 

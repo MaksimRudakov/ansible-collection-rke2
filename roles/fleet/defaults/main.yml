@@ -11,6 +11,24 @@ fleet_namespace: cattle-fleet-system
 fleet_chart_repo_name: fleet
 fleet_chart_repo_url: https://charts.rancher.io
 
+# --- Rancher Manager on top -----------------------------------------------------
+
+# Namespace (and AGENT_SCOPE) of the fleet-agent for the local cluster.
+# Empty = chart default (cattle-fleet-system, empty scope). Set
+# cattle-fleet-local-system when Rancher Manager will be installed later:
+# Rancher moves the local agent there and the agent scope becomes part of the
+# ownership id of every deployed object — with a different scope all objects
+# deployed before Rancher turn into "not owned by us". Changing it on an
+# existing install has the same effect (and needs fleet_force_upgrade)
+fleet_agent_namespace: ""
+
+# Rancher Manager takes over the fleet/fleet-crd releases once installed;
+# helm-upgrading them with standalone values afterwards fights Rancher.
+# auto — skip the chart install when a Rancher deployment is found,
+# true — always skip, false — never skip. The GitRepo part still runs
+fleet_rancher_managed: auto
+fleet_rancher_namespace: cattle-system
+
 # --- Cluster access (RKE2 defaults) -------------------------------------------
 
 fleet_kubeconfig: /etc/rancher/rke2/rke2.yaml
@@ -48,5 +66,10 @@ fleet_gitrepo_insecure_skip_tls: false
 fleet_gitrepo_username: fleet
 fleet_gitrepo_token: ""
 fleet_gitrepo_secret_name: fleet-gitrepo-auth
+
+# Bump spec.forceSyncGeneration after applying the GitRepo: re-deploys the
+# current commit, e.g. a GitRepo stalled on an unreachable chart repo that was
+# fixed outside git. Not idempotent by design — reports changed on every run
+fleet_gitrepo_force_sync: false
 
 fleet_no_log: true

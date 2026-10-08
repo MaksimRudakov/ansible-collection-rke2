@@ -35,6 +35,30 @@ argument_specs:
         type: str
         default: https://charts.rancher.io
         description: Helm repository URL.
+      fleet_agent_namespace:
+        type: str
+        default: ""
+        description: >-
+          Namespace and AGENT_SCOPE of the local-cluster fleet-agent
+          (chart value bootstrap.agentNamespace). Empty keeps the chart default
+          (cattle-fleet-system, empty scope). Set cattle-fleet-local-system
+          when Rancher Manager will be installed on this cluster later —
+          Rancher moves the agent there, and the scope is part of the
+          ownership id of every deployed object, so a mismatch turns all
+          bundles into "not owned by us". Changing it on an existing install
+          has the same effect and needs fleet_force_upgrade.
+      fleet_rancher_managed:
+        type: str
+        default: auto
+        description: >-
+          Whether Rancher Manager owns the fleet/fleet-crd releases: auto —
+          skip the chart install when deployment rancher exists in
+          fleet_rancher_namespace; true — always skip; false — never skip.
+          The GitRepo part runs either way.
+      fleet_rancher_namespace:
+        type: str
+        default: cattle-system
+        description: Namespace probed for the Rancher Manager deployment.
       fleet_kubeconfig:
         type: str
         default: /etc/rancher/rke2/rke2.yaml
@@ -106,6 +130,13 @@ argument_specs:
         elements: str
         default: []
         description: Paths within the repository to watch. Empty — repository root.
+      fleet_gitrepo_force_sync:
+        type: bool
+        default: false
+        description: >-
+          Bump spec.forceSyncGeneration after applying the GitRepo to
+          redeploy the current commit (e.g. after fixing an unreachable chart
+          repo outside git). Reports changed on every run.
       fleet_gitrepo_insecure_skip_tls:
         type: bool
         default: false

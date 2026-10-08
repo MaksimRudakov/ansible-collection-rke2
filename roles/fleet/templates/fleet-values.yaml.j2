@@ -1,2 +1,5 @@
-{{ ({'disableSecurityContext': fleet_disable_security_context}
-    | combine(fleet_extra_values, recursive=True)) | to_nice_yaml(indent=2) }}
+{% set fleet_values = {'disableSecurityContext': fleet_disable_security_context} %}
+{% if fleet_agent_namespace | length > 0 %}
+{%   set fleet_values = fleet_values | combine({'bootstrap': {'agentNamespace': fleet_agent_namespace}}) %}
+{% endif %}
+{{ (fleet_values | combine(fleet_extra_values, recursive=True)) | to_nice_yaml(indent=2) }}

@@ -53,118 +53,150 @@
       when: fleet_helm_tmp.path is defined
       changed_when: false
 
-- name: Add Fleet helm repo
+# In check mode the copy into fleet_helm_bin is held, so on a fresh node there
+# is no helm to drive the read-only probes below — skip them with a notice
+# instead of failing. A real run without helm still fails loudly
+- name: Check helm binary
   check_mode: false
+  ansible.builtin.stat:
+    path: "{{ fleet_helm_bin }}"
+  register: fleet_helm_stat
+
+# Detect check mode through a registered result. ansible_check_mode cannot be
+# used: a block-level `when` is re-evaluated per task and reads false inside
+# tasks with check_mode: false, and on ansible-core 2.19+ a set_fact holding
+# it is templated lazily in the consuming task (same false). A command is
+# skipped in check mode, so `is skipped` is a fixed value
+- name: Probe check mode
   ansible.builtin.command:
-    cmd: >-
-      {{ fleet_helm_bin }} repo add {{ fleet_chart_repo_name }}
-      {{ fleet_chart_repo_url }}
-      --force-update
-  environment:
-    KUBECONFIG: "{{ fleet_kubeconfig }}"
+    cmd: "true"
+  register: fleet_check_probe
   changed_when: false
 
-- name: Update helm repos
-  check_mode: false
-  ansible.builtin.command:
-    cmd: "{{ fleet_helm_bin }} repo update {{ fleet_chart_repo_name }}"
-  environment:
-    KUBECONFIG: "{{ fleet_kubeconfig }}"
-  changed_when: false
+- name: Report chart steps skipped in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: {{ fleet_helm_bin }} is not installed yet, helm repo and
+      chart steps are skipped
+  when:
+    - fleet_check_probe is skipped
+    - not fleet_helm_stat.stat.exists
 
-- name: Create Fleet namespace
-  ansible.builtin.command:
-    cmd: "{{ fleet_kubectl_bin }} create namespace {{ fleet_namespace }}"
-  environment:
-    KUBECONFIG: "{{ fleet_kubeconfig }}"
-  register: fleet_ns_result
-  changed_when: fleet_ns_result.rc == 0
-  failed_when:
-    - fleet_ns_result.rc != 0
-    - '"already exists" not in fleet_ns_result.stderr'
+- name: Install Fleet charts
+  when: fleet_check_probe is not skipped or fleet_helm_stat.stat.exists
+  block:
+    - name: Add Fleet helm repo
+      check_mode: false
+      ansible.builtin.command:
+        cmd: >-
+          {{ fleet_helm_bin }} repo add {{ fleet_chart_repo_name }}
+          {{ fleet_chart_repo_url }}
+          --force-update
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      changed_when: false
 
-# helm upgrade is NOT a no-op: every run creates a new release revision, so
-# with a pinned fleet_version the upgrade is skipped when that exact chart is
-# already deployed. Values drift is not detected — use fleet_force_upgrade
-# after changing fleet_extra_values / fleet_disable_security_context
-- name: Check deployed Fleet releases
-  check_mode: false
-  ansible.builtin.command:
-    cmd: "{{ fleet_helm_bin }} list --namespace {{ fleet_namespace }} --output json"
-  environment:
-    KUBECONFIG: "{{ fleet_kubeconfig }}"
-  register: fleet_releases_raw
-  changed_when: false
+    - name: Update helm repos
+      check_mode: false
+      ansible.builtin.command:
+        cmd: "{{ fleet_helm_bin }} repo update {{ fleet_chart_repo_name }}"
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      changed_when: false
 
-- name: Set deployed chart list
-  ansible.builtin.set_fact:
-    fleet_deployed_charts: >-
-      {{ fleet_releases_raw.stdout | from_json | map(attribute='chart') | list }}
+    - name: Create Fleet namespace
+      ansible.builtin.command:
+        cmd: "{{ fleet_kubectl_bin }} create namespace {{ fleet_namespace }}"
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      register: fleet_ns_result
+      changed_when: fleet_ns_result.rc == 0
+      failed_when:
+        - fleet_ns_result.rc != 0
+        - '"already exists" not in fleet_ns_result.stderr'
 
-- name: Install fleet-crd chart
-  ansible.builtin.command:
-    cmd: >-
-      {{ fleet_helm_bin }} upgrade --install fleet-crd
-      {{ fleet_chart_repo_name }}/fleet-crd
-      --namespace {{ fleet_namespace }}
-      --wait
-      {{ ('--version ' + fleet_version) if fleet_version else '' }}
-  environment:
-    KUBECONFIG: "{{ fleet_kubeconfig }}"
-  register: fleet_crd_result
-  changed_when: "'has been upgraded' in fleet_crd_result.stdout or 'has been installed' in fleet_crd_result.stdout"
-  when: >-
-    fleet_force_upgrade | bool
-    or fleet_version | length == 0
-    or ('fleet-crd-' ~ fleet_version) not in fleet_deployed_charts
+    # helm upgrade is NOT a no-op: every run creates a new release revision, so
+    # with a pinned fleet_version the upgrade is skipped when that exact chart is
+    # already deployed. Values drift is not detected — use fleet_force_upgrade
+    # after changing fleet_extra_values / fleet_disable_security_context
+    - name: Check deployed Fleet releases
+      check_mode: false
+      ansible.builtin.command:
+        cmd: "{{ fleet_helm_bin }} list --namespace {{ fleet_namespace }} --output json"
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      register: fleet_releases_raw
+      changed_when: false
 
-- name: Render Fleet values
-  check_mode: false
-  ansible.builtin.tempfile:
-    state: file
-    suffix: fleet-values.yaml
-  register: fleet_values_tmp
-  changed_when: false
+    - name: Set deployed chart list
+      ansible.builtin.set_fact:
+        fleet_deployed_charts: >-
+          {{ fleet_releases_raw.stdout | from_json | map(attribute='chart') | list }}
 
-- name: Deploy Fleet values
-  check_mode: false
-  ansible.builtin.template:
-    src: fleet-values.yaml.j2
-    dest: "{{ fleet_values_tmp.path }}"
-    mode: "0600"
-  changed_when: false
+    - name: Install fleet-crd chart
+      ansible.builtin.command:
+        cmd: >-
+          {{ fleet_helm_bin }} upgrade --install fleet-crd
+          {{ fleet_chart_repo_name }}/fleet-crd
+          --namespace {{ fleet_namespace }}
+          --wait
+          {{ ('--version ' + fleet_version) if fleet_version else '' }}
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      register: fleet_crd_result
+      changed_when: "'has been upgraded' in fleet_crd_result.stdout or 'has been installed' in fleet_crd_result.stdout"
+      when: >-
+        fleet_force_upgrade | bool
+        or fleet_version | length == 0
+        or ('fleet-crd-' ~ fleet_version) not in fleet_deployed_charts
 
-- name: Install fleet chart
-  ansible.builtin.command:
-    cmd: >-
-      {{ fleet_helm_bin }} upgrade --install fleet
-      {{ fleet_chart_repo_name }}/fleet
-      --namespace {{ fleet_namespace }}
-      --values {{ fleet_values_tmp.path }}
-      --wait
-      {{ ('--version ' + fleet_version) if fleet_version else '' }}
-  environment:
-    KUBECONFIG: "{{ fleet_kubeconfig }}"
-  register: fleet_result
-  changed_when: "'has been upgraded' in fleet_result.stdout or 'has been installed' in fleet_result.stdout"
-  when: >-
-    fleet_force_upgrade | bool
-    or fleet_version | length == 0
-    or ('fleet-' ~ fleet_version) not in fleet_deployed_charts
+    - name: Render Fleet values
+      check_mode: false
+      ansible.builtin.tempfile:
+        state: file
+        suffix: fleet-values.yaml
+      register: fleet_values_tmp
+      changed_when: false
 
-- name: Remove temporary values file
-  check_mode: false
-  ansible.builtin.file:
-    path: "{{ fleet_values_tmp.path }}"
-    state: absent
-  changed_when: false
+    - name: Deploy Fleet values
+      check_mode: false
+      ansible.builtin.template:
+        src: fleet-values.yaml.j2
+        dest: "{{ fleet_values_tmp.path }}"
+        mode: "0600"
+      changed_when: false
 
-- name: Wait for fleet-controller to be ready
-  ansible.builtin.command:
-    cmd: >-
-      {{ fleet_kubectl_bin }} rollout status deployment/fleet-controller
-      --namespace {{ fleet_namespace }}
-      --timeout=120s
-  environment:
-    KUBECONFIG: "{{ fleet_kubeconfig }}"
-  changed_when: false
+    - name: Install fleet chart
+      ansible.builtin.command:
+        cmd: >-
+          {{ fleet_helm_bin }} upgrade --install fleet
+          {{ fleet_chart_repo_name }}/fleet
+          --namespace {{ fleet_namespace }}
+          --values {{ fleet_values_tmp.path }}
+          --wait
+          {{ ('--version ' + fleet_version) if fleet_version else '' }}
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      register: fleet_result
+      changed_when: "'has been upgraded' in fleet_result.stdout or 'has been installed' in fleet_result.stdout"
+      when: >-
+        fleet_force_upgrade | bool
+        or fleet_version | length == 0
+        or ('fleet-' ~ fleet_version) not in fleet_deployed_charts
+
+    - name: Remove temporary values file
+      check_mode: false
+      ansible.builtin.file:
+        path: "{{ fleet_values_tmp.path }}"
+        state: absent
+      changed_when: false
+
+    - name: Wait for fleet-controller to be ready
+      ansible.builtin.command:
+        cmd: >-
+          {{ fleet_kubectl_bin }} rollout status deployment/fleet-controller
+          --namespace {{ fleet_namespace }}
+          --timeout=120s
+      environment:
+        KUBECONFIG: "{{ fleet_kubeconfig }}"
+      changed_when: false

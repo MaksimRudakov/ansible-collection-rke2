@@ -1,0 +1,36 @@
+---
+- name: Validate fleet_rancher_managed
+  ansible.builtin.assert:
+    that: fleet_rancher_managed | string | lower in ['auto', 'true', 'false']
+    fail_msg: "fleet_rancher_managed must be auto, true or false, got: {{ fleet_rancher_managed }}"
+    quiet: true
+
+# Rancher Manager owns the fleet/fleet-crd releases after its install (it
+# helm-upgrades them with its own values and moves the local agent); a
+# standalone upgrade from here would overwrite that
+- name: Look for a Rancher Manager deployment
+  check_mode: false
+  ansible.builtin.command:
+    cmd: >-
+      {{ fleet_kubectl_bin }} get deployment rancher
+      --namespace {{ fleet_rancher_namespace }}
+      --ignore-not-found --output name
+  environment:
+    KUBECONFIG: "{{ fleet_kubeconfig }}"
+  register: fleet_rancher_lookup
+  changed_when: false
+  when: fleet_rancher_managed | string | lower == 'auto'
+
+- name: Set Rancher Manager presence
+  ansible.builtin.set_fact:
+    fleet_rancher_present: >-
+      {{ (fleet_rancher_managed | string | lower == 'true')
+         or (fleet_rancher_lookup.stdout | default('') | length > 0) }}
+
+- name: Report skipped chart install
+  ansible.builtin.debug:
+    msg: >-
+      Fleet is managed by Rancher Manager ({{ fleet_rancher_namespace }}/rancher):
+      fleet-crd/fleet charts are left to Rancher, only the GitRepo is applied.
+      Upgrade Fleet together with Rancher; set fleet_rancher_managed: false to override
+  when: fleet_rancher_present | bool
