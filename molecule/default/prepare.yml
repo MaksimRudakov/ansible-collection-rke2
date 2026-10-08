@@ -9,6 +9,17 @@
         state: present
         update_cache: true
 
+    # Reproduce the Ubuntu trap for kubelet graceful shutdown: this drop-in
+    # ships with unattended-upgrades and sorts after kubelet's 99-kubelet.conf,
+    # capping InhibitDelayMaxSec at 30s. The role's zz- file must win over it
+    - name: Plant the unattended-upgrades logind drop-in
+      ansible.builtin.copy:
+        dest: /usr/lib/systemd/logind.conf.d/unattended-upgrades-logind-maxdelay.conf
+        content: |
+          [Login]
+          InhibitDelayMaxSec=30
+        mode: "0644"
+
     # Cilium bind-mounts /sys/fs/bpf and /run/cilium/cgroupv2 into pods and
     # requires shared mount propagation, which docker containers get as
     # private by default

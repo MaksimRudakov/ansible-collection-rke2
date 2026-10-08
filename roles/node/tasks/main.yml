@@ -45,6 +45,10 @@
   ansible.builtin.include_tasks: agent.yml
   when: rke2_role == 'agent'
 
+- name: Verify graceful shutdown is active
+  ansible.builtin.include_tasks: shutdown_check.yml
+  when: rke2_shutdown_grace_period | int > 0
+
 - name: Apply node-role labels
   ansible.builtin.include_tasks: node_roles.yml
   when: rke2_node_roles | length > 0

@@ -119,6 +119,13 @@ rke2_kubelet_config:
     nodefs.available: 2m
     imagefs.available: 2m
 
+# Graceful node shutdown: kubelet drains pods in order on OS shutdown instead
+# of dying with them. The role also pins systemd-logind InhibitDelayMaxSec —
+# Ubuntu's unattended-upgrades drop-in (30s) and systemd < 254 otherwise
+# disable the feature silently. Hypervisor must not force-stop the VM earlier
+rke2_shutdown_grace_period: 90
+rke2_shutdown_grace_period_critical_pods: 30
+
 # Flags only for settings without a config-file field. Never duplicate a
 # field set above: the flag silently wins and the role refuses the combination
 # rke2_kubelet_arg:

@@ -117,7 +117,7 @@ Canonical variable reference: [`roles/node/meta/argument_specs.yml`](roles/node/
 | Installation & air-gap | `rke2_version`, `rke2_airgap` + `rke2_mirror_base` + `rke2_airgap_url_rewrites`, `rke2_install_method`, `rke2_binary_search_paths`, `rke2_allow_downgrade` |
 | Topology & API access | `rke2_server_url` (+ `rke2_server_url_wait` / `_timeout`), `rke2_token`, `rke2_tls_san`, `rke2_servers_group` / `rke2_first_server` |
 | Networking & CNI | `rke2_cni`, `rke2_disable_kube_proxy` (derived), `rke2_cluster_cidr`, `rke2_service_cidr`, `rke2_cilium_values`, `rke2_extra_config`, `rke2_manifests` |
-| Node classes | `rke2_node_labels`, `rke2_node_taints`, `rke2_node_roles` (ROLES column via kubectl — kubelet may not self-assign those), `rke2_kubelet_config` (KubeletConfiguration drop-in), `rke2_kubelet_arg`, per-component args |
+| Node classes | `rke2_node_labels`, `rke2_node_taints`, `rke2_node_roles` (ROLES column via kubectl — kubelet may not self-assign those), `rke2_kubelet_config` (KubeletConfiguration drop-in), `rke2_kubelet_arg`, per-component args, `rke2_shutdown_grace_period` / `_critical_pods` (graceful node shutdown) |
 | Registries | `rke2_registry_mirrors`, `rke2_registry_configs` |
 | etcd | `rke2_etcd_snapshot_schedule_cron` / `_retention` / `_dir`, `rke2_etcd_expose_metrics` |
 | Security | `rke2_cis_profile` (the role provisions the etcd user and CIS sysctl automatically), `rke2_write_kubeconfig_mode`, `rke2_no_log` |
@@ -141,6 +141,26 @@ rke2_kubelet_config:
 ```
 
 `rke2_kubelet_arg` stays for flags that have no config-file counterpart (`node-ip`, ...). The image-gc/eviction/reserved flags are deprecated upstream and, more importantly, a flag silently overrides the same field in every drop-in — the role refuses a setting present in both places. **Upgrading from a release before 1.5.0:** inventories that copied the old flag-based profile into `rke2_kubelet_arg` fail on that guard until migrated. To unblock immediately without touching the cluster set `rke2_kubelet_config: {}`; to migrate, move the values to `rke2_kubelet_config`, set `rke2_kubelet_arg: []` and run `reconfig` once (one restart per node, no intermediate state), checking `/api/v1/nodes/<node>/proxy/configz` after each node. Requires an RKE2 release that starts kubelet with `--config-dir` (v1.32+).
+
+## Graceful node shutdown
+
+Without it a node reboot kills every pod at once: endpoints go stale until the API notices, and anything with a long `terminationGracePeriodSeconds` (Rancher, databases) is cut mid-flight. kubelet's GracefulNodeShutdown fixes that by holding a systemd-logind *delay* inhibitor on OS shutdown and terminating pods in order — but it only works if logind's `InhibitDelayMaxSec` is at least the grace period, and that is where it silently breaks: kubelet writes `99-kubelet.conf`, Ubuntu's `unattended-upgrades-logind-maxdelay.conf` (30s) sorts later and wins, and systemd < 254 (Ubuntu 22.04, EL8/EL9) ignores the SIGHUP kubelet sends. kubelet then logs `Failed to start node shutdown manager`, the node is Ready, and graceful shutdown is off.
+
+The role owns both sides from one pair of variables:
+
+```yaml
+rke2_shutdown_grace_period: 90          # seconds, 0 = off (default)
+rke2_shutdown_grace_period_critical_pods: 30
+```
+
+It merges `shutdownGracePeriod` / `shutdownGracePeriodCriticalPods` into the kubelet drop-in, writes `zz-rke2-kubelet-shutdown.conf` with the matching `InhibitDelayMaxSec` (sorts after everything else, the distro file is left untouched), reloads logind the way the installed systemd supports (SIGHUP ≥ 254, restart below) **before** kubelet starts or restarts, and after start / `reconfig` asserts that kubelet actually holds the inhibitor. Setting `shutdownGracePeriod*` directly in `rke2_kubelet_config` is refused.
+
+Things to know:
+
+- **The hypervisor must wait.** A forced VM stop earlier than the grace period makes the whole exercise pointless — Harvester/KubeVirt `terminationGracePeriodSeconds` defaults to 120s, check yours.
+- A pod whose `terminationGracePeriodSeconds` exceeds the remaining window is still killed when the window closes.
+- Verification on a node: `systemd-inhibit --list` must show a `kubelet ... shutdown ... delay` line; `systemd-analyze cat-config systemd/logind.conf` shows which drop-in wins. `rke2_shutdown_verify_inhibitor: false` disables the post-start assertion where logind is not usable (containers).
+- `uninstall` removes both logind drop-ins (the role's and kubelet's).
 
 ## Monitoring control-plane components
 
@@ -206,7 +226,7 @@ Empty `fleet_gitrepo_token` — public repo, no secret. `-t gitrepo` re-applies 
 
 ## Day-2 helpers (role entry points)
 
-For custom playbooks, `maksimrudakov.rke2.node` exposes reusable task files — `token`, `cordon`, `drain`, `uncordon`, `stop`, `start`, `node_roles`, `delete_node`, `uninstall`, `wait_ready`, `wait_server_url`, `rotate_certs`, `config`:
+For custom playbooks, `maksimrudakov.rke2.node` exposes reusable task files — `token`, `cordon`, `drain`, `uncordon`, `stop`, `start`, `node_roles`, `delete_node`, `uninstall`, `wait_ready`, `wait_server_url`, `shutdown_check`, `rotate_certs`, `config`:
 
 ```yaml
 - name: Drain node before maintenance

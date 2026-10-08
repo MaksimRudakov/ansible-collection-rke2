@@ -1,0 +1,29 @@
+---
+# kubelet keeps running and the node goes Ready even when the shutdown
+# manager failed to start — the only trace is a log line. The inhibitor in
+# systemd-inhibit --list is the observable proof that graceful shutdown is on
+- name: Verify kubelet holds the logind shutdown inhibitor
+  when:
+    - rke2_shutdown_grace_period | int > 0
+    - rke2_shutdown_verify_inhibitor | bool
+    - not ansible_check_mode
+  block:
+    - name: Wait for the kubelet shutdown inhibitor
+      ansible.builtin.command:
+        cmd: systemd-inhibit --list --no-pager --no-legend
+      register: rke2_inhibitors
+      changed_when: false
+      retries: 6
+      delay: 5
+      until: rke2_inhibitors.stdout is search('kubelet.*shutdown.*delay')
+  rescue:
+    - name: Report the missing inhibitor
+      ansible.builtin.fail:
+        msg: >-
+          kubelet did not register the shutdown inhibitor — the node shutdown
+          manager failed to start, graceful shutdown is OFF on this node.
+          Check: systemd-analyze cat-config systemd/logind.conf (last
+          InhibitDelayMaxSec must be >= {{ rke2_shutdown_grace_period }}),
+          journalctl -u rke2-{{ rke2_role }} | grep -i "shutdown manager",
+          systemd-inhibit --list. Set rke2_shutdown_verify_inhibitor: false
+          where logind is not usable (containers)

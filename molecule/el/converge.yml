@@ -15,6 +15,17 @@
         name: maksimrudakov.rke2.node
         tasks_from: install
 
+    # config.yml on an installed-but-not-started node: renders the files and
+    # — the point here — writes the logind drop-in and restarts systemd-logind
+    # (EL8 239 / EL9 252 / EL10 257: both reload branches)
+    - name: Run config tasks with graceful shutdown enabled
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: config
+      vars:
+        rke2_shutdown_grace_period: 90
+        rke2_shutdown_grace_period_critical_pods: 30
+
     - name: Report detection facts
       ansible.builtin.debug:
         msg:

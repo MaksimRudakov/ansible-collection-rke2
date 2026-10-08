@@ -36,6 +36,11 @@
         name: maksimrudakov.rke2.node
         tasks_from: wait_ready
 
+    - name: Verify graceful shutdown is active
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: shutdown_check
+
     - name: Uncordon node
       ansible.builtin.include_role:
         name: maksimrudakov.rke2.node
@@ -78,6 +83,11 @@
       ansible.builtin.include_role:
         name: maksimrudakov.rke2.node
         tasks_from: wait_ready
+
+    - name: Verify graceful shutdown is active
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: shutdown_check
 
     - name: Uncordon node
       ansible.builtin.include_role:

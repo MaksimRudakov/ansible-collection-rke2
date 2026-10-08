@@ -12,6 +12,38 @@
       - /usr/bin/rke2
       - /opt/rke2/bin/rke2
   tasks:
+    - name: Read the role's logind drop-in
+      ansible.builtin.slurp:
+        src: /etc/systemd/logind.conf.d/zz-rke2-kubelet-shutdown.conf
+      register: rke2_logind_dropin
+
+    - name: Assert the logind drop-in carries the grace period
+      ansible.builtin.assert:
+        that: "'InhibitDelayMaxSec=90' in (rke2_logind_dropin.content | b64decode)"
+
+    - name: Check whether systemd-logind runs in this container
+      ansible.builtin.service_facts:
+
+    - name: Record logind state
+      ansible.builtin.set_fact:
+        rke2_logind_active:
+          stdout: "{{ ansible_facts.services['systemd-logind.service'].state | default('unknown') }}"
+
+    # only meaningful where logind actually runs: proves the restart/HUP
+    # branch made logind pick the value up
+    - name: Read the live InhibitDelayMaxSec from logind
+      ansible.builtin.command:
+        cmd: busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager InhibitDelayMaxUSec
+      register: rke2_logind_live
+      changed_when: false
+      when: rke2_logind_active.stdout == 'running'
+
+    - name: Assert logind holds the new limit
+      ansible.builtin.assert:
+        that: rke2_logind_live.stdout == 't 90000000'
+        fail_msg: "logind reports {{ rke2_logind_live.stdout }} — reload branch did not take effect"
+      when: rke2_logind_active.stdout == 'running'
+
     - name: Locate the rke2 binary as installed on this distro
       ansible.builtin.command:
         cmd: command -v rke2

@@ -59,6 +59,19 @@
       topology-manager-policy: topologyManagerPolicy
       feature-gates: featureGates
 
+- name: Configure graceful node shutdown (systemd-logind side)
+  ansible.builtin.include_tasks: shutdown.yml
+
+# the kubelet side of graceful shutdown comes from the same variables
+- name: Compose the effective kubelet drop-in
+  ansible.builtin.set_fact:
+    rke2_kubelet_config_effective: "{{ rke2_kubelet_config | combine(rke2_kubelet_shutdown_fields) }}"
+  vars:
+    rke2_kubelet_shutdown_fields: >-
+      {{ {'shutdownGracePeriod': rke2_shutdown_grace_period ~ 's',
+          'shutdownGracePeriodCriticalPods': rke2_shutdown_grace_period_critical_pods ~ 's'}
+         if rke2_shutdown_grace_period | int > 0 else {} }}
+
 - name: Deploy registries.yaml
   ansible.builtin.template:
     src: registries.yaml.j2
@@ -98,27 +111,27 @@
     owner: root
     group: root
     mode: "0755"
-  when: rke2_kubelet_config | length > 0
+  when: rke2_kubelet_config_effective | length > 0
 
 - name: Deploy kubelet config drop-in
   ansible.builtin.copy:
     content: |
       apiVersion: kubelet.config.k8s.io/v1beta1
       kind: KubeletConfiguration
-      {{ rke2_kubelet_config | to_nice_yaml(indent=2) }}
+      {{ rke2_kubelet_config_effective | to_nice_yaml(indent=2) }}
     dest: "{{ rke2_kubelet_config_dir }}/{{ rke2_kubelet_config_name }}.conf"
     owner: root
     group: root
     mode: "0600"
   notify: Restart rke2
-  when: rke2_kubelet_config | length > 0
+  when: rke2_kubelet_config_effective | length > 0
 
 - name: Remove kubelet config drop-in when unset
   ansible.builtin.file:
     path: "{{ rke2_kubelet_config_dir }}/{{ rke2_kubelet_config_name }}.conf"
     state: absent
   notify: Restart rke2
-  when: rke2_kubelet_config | length == 0
+  when: rke2_kubelet_config_effective | length == 0
 
 - name: Deploy Cilium HelmChartConfig
   ansible.builtin.template:
