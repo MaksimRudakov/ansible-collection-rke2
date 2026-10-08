@@ -62,22 +62,28 @@
     path: "{{ fleet_helm_bin }}"
   register: fleet_helm_stat
 
-# Freeze the run mode: a block-level `when` is re-evaluated per task, and in
-# tasks carrying check_mode: false ansible_check_mode reads false — so it
-# cannot gate the probes below by itself
-- name: Decide whether chart steps can run
-  ansible.builtin.set_fact:
-    fleet_charts_runnable: "{{ not ansible_check_mode or fleet_helm_stat.stat.exists }}"
+# Detect check mode through a registered result. ansible_check_mode cannot be
+# used: a block-level `when` is re-evaluated per task and reads false inside
+# tasks with check_mode: false, and on ansible-core 2.19+ a set_fact holding
+# it is templated lazily in the consuming task (same false). A command is
+# skipped in check mode, so `is skipped` is a fixed value
+- name: Probe check mode
+  ansible.builtin.command:
+    cmd: "true"
+  register: fleet_check_probe
+  changed_when: false
 
 - name: Report chart steps skipped in check mode
   ansible.builtin.debug:
     msg: >-
       Check mode: {{ fleet_helm_bin }} is not installed yet, helm repo and
       chart steps are skipped
-  when: not fleet_charts_runnable | bool
+  when:
+    - fleet_check_probe is skipped
+    - not fleet_helm_stat.stat.exists
 
 - name: Install Fleet charts
-  when: fleet_charts_runnable | bool
+  when: fleet_check_probe is not skipped or fleet_helm_stat.stat.exists
   block:
     - name: Add Fleet helm repo
       check_mode: false
