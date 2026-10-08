@@ -87,7 +87,7 @@
           /var/lib/rancher/rke2/bin/kubectl
           --kubeconfig /etc/rancher/rke2/rke2.yaml
           get deployment fleet-agent -n cattle-fleet-local-system
-          -o jsonpath={.spec.template.spec.containers[0].env[?(@.name=="AGENT_SCOPE")].value}
+          -o 'jsonpath={.spec.template.spec.containers[0].env[?(@.name=="AGENT_SCOPE")].value}'
       register: rke2_fleet_agent_scope
       changed_when: false
       retries: 18
