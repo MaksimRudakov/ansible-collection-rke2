@@ -9,6 +9,16 @@
   changed_when: false
   check_mode: false
 
+# a masked logind (minimal container images) cannot be reloaded and does not
+# need to be: it reads the drop-in whenever it is started
+# show(1) is read-only — the systemd module cannot report LoadState
+- name: Check whether systemd-logind is masked  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl show -p LoadState --value systemd-logind.service
+  register: rke2_logind_loadstate
+  changed_when: false
+  check_mode: false
+
 - name: Reload systemd-logind  # noqa: no-handler
   ansible.builtin.command:
     cmd: >-
@@ -16,6 +26,7 @@
          if rke2_systemd_version | int >= 254
          else 'systemctl restart systemd-logind.service' }}
   changed_when: true
+  when: rke2_logind_loadstate.stdout | trim != 'masked'
   vars:
     rke2_systemd_version: >-
       {{ rke2_systemctl_version.stdout_lines[0] | regex_search('systemd (\d+)', '\1') | first }}
