@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: ansible_collections/maksimrudakov/rke2
-      - uses: ansible/ansible-lint@e7f397ad6dfa20d274afa17cd7bbedd84ed136f5 # v26.9.0
+      - uses: ansible/ansible-lint@fac2489f3e4ccffa83a40b839770abbf4ab52327 # v26.10.0
         with:
           working_directory: ansible_collections/maksimrudakov/rke2
 
@@ -71,7 +71,7 @@ jobs:
         run: pip install "ansible-core>=2.16"
       - name: Build collection artifact
         run: ansible-galaxy collection build
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: collection-tarball
           path: maksimrudakov-rke2-*.tar.gz
