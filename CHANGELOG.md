@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-11-16
+
 ### Fixed
 
 - `node` role: registry credentials, mirror endpoints and component args (`rke2_*_arg`, `rke2_etcd_snapshot_schedule_cron`, `rke2_write_kubeconfig_mode`) are serialized with `to_json` in `registries.yaml` / `config.yaml` instead of being pasted into a double-quoted YAML string. A value ending in `\` or containing `"` or an unknown escape (`\q`) produced an unparsable file and the first server hung in `activating` on `yaml: ... found unexpected end of stream`. Output for ordinary values is byte-identical, so upgrading the collection does not restart RKE2. The `airgap` scenario now round-trips such strings through the templates. Consumers who worked around it with `(pw | to_json)[1:-1]` must drop the workaround — it is now double-escaped.
