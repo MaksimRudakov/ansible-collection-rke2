@@ -1,0 +1,87 @@
+---
+# User-supplied strings (registry credentials, endpoints, component args) must
+# survive YAML rendering byte for byte: a trailing backslash used to escape the
+# closing quote and rke2-server hung on "found unexpected end of stream".
+- name: Check template escaping
+  vars:
+    rke2_tpl_dir: /var/tmp/rke2-template-escaping
+    rke2_tricky_strings:
+      - abc\
+      - a"b
+      - a\qb
+      - p@ss$:{}#
+      - "#leading hash"
+      - "trailing space "
+      - "1234"
+      - пароль
+      - £
+    rke2_registry_mirrors:
+      - name: docker.io
+        endpoint: https://mirror.example.com/a\b"c
+    rke2_registry_configs: >-
+      {%- set out = [] -%}
+      {%- for s in rke2_tricky_strings -%}
+      {%- set _ = out.append({'host': 'r' ~ loop.index ~ '.example.com', 'username': s, 'password': s}) -%}
+      {%- endfor -%}
+      {{ out }}
+    rke2_kubelet_arg: "{{ rke2_tricky_strings }}"
+    rke2_kube_apiserver_arg: "{{ rke2_tricky_strings }}"
+    rke2_etcd_snapshot_schedule_cron: 0 */6 * * *
+    rke2_first_server: true
+  block:
+    - name: Create a scratch dir for rendered templates
+      ansible.builtin.file:
+        path: "{{ rke2_tpl_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Render templates
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/node/templates/{{ item }}.j2"
+        dest: "{{ rke2_tpl_dir }}/{{ item }}"
+        mode: "0600"
+      loop:
+        - registries.yaml
+        - config-server.yaml
+        - config-agent.yaml
+
+    - name: Read rendered templates back
+      ansible.builtin.slurp:
+        src: "{{ rke2_tpl_dir }}/{{ item }}"
+      loop:
+        - registries.yaml
+        - config-server.yaml
+        - config-agent.yaml
+      register: rke2_tpl_rendered
+
+    - name: Parse rendered templates
+      ansible.builtin.set_fact:
+        rke2_tpl_registries: "{{ rke2_tpl_rendered.results[0].content | b64decode | from_yaml }}"
+        rke2_tpl_server: "{{ rke2_tpl_rendered.results[1].content | b64decode | from_yaml }}"
+        rke2_tpl_agent: "{{ rke2_tpl_rendered.results[2].content | b64decode | from_yaml }}"
+
+    - name: Assert registry credentials round-trip unchanged
+      ansible.builtin.assert:
+        that:
+          - rke2_tpl_registries.configs[item.host].auth.username == item.username
+          - rke2_tpl_registries.configs[item.host].auth.password == item.password
+        quiet: true
+      loop: "{{ rke2_registry_configs }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Assert mirror endpoint and component args round-trip unchanged
+      ansible.builtin.assert:
+        that:
+          - rke2_tpl_registries.mirrors['docker.io'].endpoint == [rke2_registry_mirrors[0].endpoint]
+          - rke2_tpl_server['kubelet-arg'] == rke2_tricky_strings
+          - rke2_tpl_server['kube-apiserver-arg'] == rke2_tricky_strings
+          - rke2_tpl_server['etcd-snapshot-schedule-cron'] == rke2_etcd_snapshot_schedule_cron
+          - rke2_tpl_server['write-kubeconfig-mode'] == '0600'
+          - rke2_tpl_agent['kubelet-arg'] == rke2_tricky_strings
+
+  always:
+    - name: Remove the scratch dir
+      ansible.builtin.file:
+        path: "{{ rke2_tpl_dir }}"
+        state: absent

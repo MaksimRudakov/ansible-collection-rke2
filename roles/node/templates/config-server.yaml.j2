@@ -22,7 +22,7 @@ disable:
 disable-kube-proxy: {{ rke2_disable_kube_proxy | lower }}
 etcd-expose-metrics: {{ rke2_etcd_expose_metrics | lower }}
 {% if rke2_etcd_snapshot_schedule_cron | length > 0 %}
-etcd-snapshot-schedule-cron: "{{ rke2_etcd_snapshot_schedule_cron }}"
+etcd-snapshot-schedule-cron: {{ rke2_etcd_snapshot_schedule_cron | string | to_json(ensure_ascii=false) }}
 {% endif %}
 {% if rke2_etcd_snapshot_retention | string | length > 0 %}
 etcd-snapshot-retention: {{ rke2_etcd_snapshot_retention }}
@@ -30,7 +30,7 @@ etcd-snapshot-retention: {{ rke2_etcd_snapshot_retention }}
 {% if rke2_etcd_snapshot_dir | length > 0 %}
 etcd-snapshot-dir: {{ rke2_etcd_snapshot_dir }}
 {% endif %}
-write-kubeconfig-mode: "{{ rke2_write_kubeconfig_mode }}"
+write-kubeconfig-mode: {{ rke2_write_kubeconfig_mode | string | to_json(ensure_ascii=false) }}
 {% if rke2_cis_profile | length > 0 %}
 profile: {{ rke2_cis_profile }}
 {% endif %}
@@ -55,31 +55,31 @@ node-taint:
 {% if rke2_kubelet_arg | length > 0 %}
 kubelet-arg:
 {% for arg in rke2_kubelet_arg %}
-  - "{{ arg }}"
+  - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
 {% if rke2_kube_apiserver_arg | length > 0 %}
 kube-apiserver-arg:
 {% for arg in rke2_kube_apiserver_arg %}
-  - "{{ arg }}"
+  - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
 {% if rke2_kube_controller_manager_arg | length > 0 %}
 kube-controller-manager-arg:
 {% for arg in rke2_kube_controller_manager_arg %}
-  - "{{ arg }}"
+  - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
 {% if rke2_kube_scheduler_arg | length > 0 %}
 kube-scheduler-arg:
 {% for arg in rke2_kube_scheduler_arg %}
-  - "{{ arg }}"
+  - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
 {% if rke2_etcd_arg | length > 0 %}
 etcd-arg:
 {% for arg in rke2_etcd_arg %}
-  - "{{ arg }}"
+  - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
 {% if rke2_extra_config | length > 0 %}

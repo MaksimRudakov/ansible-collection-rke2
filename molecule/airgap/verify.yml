@@ -62,3 +62,6 @@
       ansible.builtin.assert:
         that:
           - rke2_downgrade_refused | default(false)
+
+    - name: Check template escaping of user-supplied strings
+      ansible.builtin.include_tasks: tasks/template_escaping.yml

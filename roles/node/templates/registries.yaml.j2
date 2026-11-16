@@ -3,17 +3,17 @@ mirrors:
 {% for mirror in rke2_registry_mirrors %}
   {{ mirror.name }}:
     endpoint:
-      - "{{ mirror.endpoint }}"
+      - {{ mirror.endpoint | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
 {% if rke2_registry_configs | length > 0 %}
 configs:
 {% for cfg in rke2_registry_configs %}
-  "{{ cfg.host }}":
+  {{ cfg.host | string | to_json(ensure_ascii=false) }}:
 {% if cfg.username is defined and cfg.password is defined %}
     auth:
-      username: "{{ cfg.username }}"
-      password: "{{ cfg.password }}"
+      username: {{ cfg.username | string | to_json(ensure_ascii=false) }}
+      password: {{ cfg.password | string | to_json(ensure_ascii=false) }}
 {% endif %}
 {% if cfg.insecure_skip_verify | default(false) %}
     tls:
