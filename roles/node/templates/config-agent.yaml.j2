@@ -15,7 +15,7 @@ node-taint:
 {% if rke2_kubelet_arg | length > 0 %}
 kubelet-arg:
 {% for arg in rke2_kubelet_arg %}
-  - "{{ arg }}"
+  - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
 {% if rke2_extra_config | length > 0 %}
