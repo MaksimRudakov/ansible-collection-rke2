@@ -155,6 +155,12 @@
           [ -z "$shims" ] || kill -9 $(pstree $shims) 2>/dev/null
           exit 0
 
+    - name: Ensure the rke2-server drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/rke2-server.service.d
+        state: directory
+        mode: "0755"
+
     - name: Kill pods whenever rke2-server stops
       ansible.builtin.copy:
         dest: /etc/systemd/system/rke2-server.service.d/molecule-kill-pods.conf
