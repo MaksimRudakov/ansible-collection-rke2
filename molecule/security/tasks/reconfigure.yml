@@ -8,6 +8,7 @@
   changed_when: false
 
 - name: "Apply config: {{ rke2_step.name }}"
+  when: not (rke2_step.plain_restart | default(false))
   ansible.builtin.include_role:
     name: maksimrudakov.rke2.node
     tasks_from: config
@@ -21,6 +22,14 @@
   block:
     - name: "Restart now: {{ rke2_step.name }}"
       ansible.builtin.meta: flush_handlers
+
+    # timeout stops only the client: the systemd job keeps running, so
+    # containerd is still alive while the rescue collects diagnostics
+    - name: "Restart without changes: {{ rke2_step.name }}"
+      ansible.builtin.command:
+        cmd: timeout 600 systemctl restart rke2-server
+      when: rke2_step.plain_restart | default(false)
+      changed_when: true
   rescue:
     - name: "Collect rke2-server diagnostics: {{ rke2_step.name }}"
       ansible.builtin.shell:
@@ -28,14 +37,23 @@
           set -o pipefail
           crictl() { /var/lib/rancher/rke2/bin/crictl --runtime-endpoint unix:///run/k3s/containerd/containerd.sock "$@"; }
           systemctl status rke2-server --no-pager -l || true
+          echo '--- top'
+          top -b -n 1 -o %CPU | head -25 || true
           echo '--- journal'
-          journalctl -u rke2-server -o short-precise --no-pager -n 300 || true
+          journalctl -u rke2-server -o short-precise --no-pager -n 200 || true
           echo '--- containers'
           crictl ps -a || true
-          echo '--- kube-apiserver'
-          for c in $(crictl ps -a -q --name kube-apiserver | head -2); do
-            crictl logs --tail 60 "$c" 2>&1 || true
+          # pod logs stay on disk after ExecStopPost kills containerd
+          for d in /var/log/pods/kube-system_kube-apiserver-* /var/log/pods/kube-system_etcd-*; do
+            for f in $(ls -t "$d"/*/*.log 2>/dev/null | head -3); do
+              echo "--- $f"
+              tail -n 80 "$f" || true
+            done
           done
+          echo '--- kubelet.log'
+          tail -n 80 /var/lib/rancher/rke2/agent/logs/kubelet.log || true
+          echo '--- containerd.log'
+          tail -n 60 /var/lib/rancher/rke2/agent/containerd/containerd.log || true
         executable: /bin/bash
       register: rke2_diag
       changed_when: false

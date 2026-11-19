@@ -8,6 +8,11 @@
     rke2_kubectl_cmd: >-
       /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
     rke2_apiserver_manifest: /var/lib/rancher/rke2/agent/pod-manifests/kube-apiserver.yaml
+    # A narrow rule change: the restart check must not depend on audit volume
+    rke2_step_rules:
+      - level: Metadata
+        resources: [{group: "", resources: [secrets, configmaps]}]
+      - level: None
     rke2_privileged_pod: |
       apiVersion: v1
       kind: Pod
@@ -129,12 +134,20 @@
 
     # --- changes: one restart each ------------------------------------------
 
+    # Isolates "rke2-server restart in CI is broken" from the feature itself
+    - name: Restart once without changes
+      ansible.builtin.include_tasks: tasks/reconfigure.yml
+      vars:
+        rke2_step:
+          name: baseline restart
+          plain_restart: true
+
     - name: Change a policy rule and an audit-log arg in one run
       ansible.builtin.include_tasks: tasks/reconfigure.yml
       vars:
         rke2_step:
           name: policy + config.yaml change
-          audit_policy: "{{ rke2_base.rke2_audit_policy | combine({'rules': [{'level': 'Metadata'}]}) }}"
+          audit_policy: "{{ rke2_base.rke2_audit_policy | combine({'rules': rke2_step_rules}) }}"
           audit_log_maxage: 7
 
     - name: Read the regenerated kube-apiserver manifest
@@ -161,7 +174,7 @@
       vars:
         rke2_step:
           name: server file change
-          audit_policy: "{{ rke2_base.rke2_audit_policy | combine({'rules': [{'level': 'Metadata'}]}) }}"
+          audit_policy: "{{ rke2_base.rke2_audit_policy | combine({'rules': rke2_step_rules}) }}"
           audit_log_maxage: 7
           server_files:
             - "{{ rke2_base.rke2_server_files[0] }}"
