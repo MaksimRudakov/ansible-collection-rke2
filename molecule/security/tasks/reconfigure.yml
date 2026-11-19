@@ -25,7 +25,8 @@
     - name: "Collect rke2-server diagnostics: {{ rke2_step.name }}"
       ansible.builtin.shell:
         cmd: |
-          crictl() { crictl "$@"; }
+          set -o pipefail
+          crictl() { /var/lib/rancher/rke2/bin/crictl --runtime-endpoint unix:///run/k3s/containerd/containerd.sock "$@"; }
           systemctl status rke2-server --no-pager -l || true
           echo '--- journal'
           journalctl -u rke2-server -o short-precise --no-pager -n 300 || true
