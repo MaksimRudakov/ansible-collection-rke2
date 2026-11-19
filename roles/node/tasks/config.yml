@@ -59,6 +59,10 @@
       topology-manager-policy: topologyManagerPolicy
       feature-gates: featureGates
 
+- name: Validate audit / Pod Security / server files settings
+  ansible.builtin.include_tasks: server_files_validate.yml
+  when: rke2_role == 'server'
+
 - name: Configure graceful node shutdown (systemd-logind side)
   ansible.builtin.include_tasks: shutdown.yml
 
@@ -91,6 +95,11 @@
   when:
     - rke2_registry_mirrors | length == 0
     - rke2_registry_configs | length == 0
+
+# Before config.yaml: the keys it gains point at these files
+- name: Deploy audit policy, Pod Security config and server files
+  ansible.builtin.include_tasks: server_files.yml
+  when: rke2_role == 'server'
 
 - name: Deploy RKE2 config.yaml
   ansible.builtin.template:

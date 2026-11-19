@@ -1,0 +1,91 @@
+---
+# Servers only. Runs before config.yaml is rendered and before the first
+# rke2-server start: RKE2 mounts a file into the kube-apiserver static pod
+# only if it exists when the pod manifest is generated, and hashes the mounted
+# files into the manifest — a content change recreates the pod on restart.
+- name: Compose role-managed control-plane files
+  ansible.builtin.set_fact:
+    rke2_server_file_marker: "# Managed by Ansible (maksimrudakov.rke2) — do not edit"
+    rke2_managed_server_files:
+      - path: "{{ rke2_audit_policy_path }}"
+        enabled: "{{ rke2_audit_policy | length > 0 }}"
+        content: "{{ rke2_audit_policy }}"
+      - path: "{{ rke2_pss_config_path }}"
+        enabled: "{{ rke2_pss_config | length > 0 }}"
+        content: "{{ rke2_pss_config }}"
+    rke2_server_files_present: >-
+      {{ rke2_server_files | rejectattr('state', 'defined') | list
+         + rke2_server_files | selectattr('state', 'defined') | selectattr('state', 'eq', 'present') | list }}
+    rke2_server_files_absent: >-
+      {{ rke2_server_files | selectattr('state', 'defined') | selectattr('state', 'eq', 'absent') | list }}
+
+- name: Ensure directories for control-plane files exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: >-
+    {{ (rke2_managed_server_files | selectattr('enabled') | map(attribute='path') | list
+        + rke2_server_files_present | map(attribute='path') | list)
+       | map('dirname') | unique }}
+
+# The marker tells our file apart from the level-None policy RKE2 writes to
+# the same default path in CIS mode: only ours is removed when switched off
+- name: Deploy audit policy / Pod Security configuration
+  ansible.builtin.copy:
+    content: |
+      {{ rke2_server_file_marker }}
+      {{ item.content | to_nice_yaml(indent=2) }}
+    dest: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ rke2_managed_server_files | selectattr('enabled') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  notify: Restart rke2
+
+- name: Look for switched-off role-managed files
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  loop: "{{ rke2_managed_server_files | rejectattr('enabled') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: rke2_managed_server_files_stale
+  failed_when: false
+
+- name: Remove switched-off role-managed files
+  ansible.builtin.file:
+    path: "{{ item.item.path }}"
+    state: absent
+  loop: "{{ rke2_managed_server_files_stale.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+  when:
+    - item.content is defined
+    - (item.content | b64decode).startswith(rke2_server_file_marker)
+  notify: Restart rke2
+
+- name: Deploy rke2_server_files
+  ansible.builtin.copy:
+    content: "{{ item.content if item.content is string else item.content | to_nice_yaml(indent=2) }}"
+    dest: "{{ item.path }}"
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode | default('0600') }}"
+  loop: "{{ rke2_server_files_present }}"
+  loop_control:
+    label: "{{ item.path }}"
+  no_log: "{{ rke2_no_log }}"
+  notify: Restart rke2
+
+- name: Remove rke2_server_files marked absent
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ rke2_server_files_absent }}"
+  loop_control:
+    label: "{{ item.path }}"
+  notify: Restart rke2

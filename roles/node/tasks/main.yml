@@ -13,6 +13,10 @@
     fail_msg: "rke2_mirror_base is required when rke2_airgap is true"
   when: rke2_airgap | bool
 
+- name: Validate audit / Pod Security / server files settings
+  ansible.builtin.include_tasks: server_files_validate.yml
+  when: rke2_role == 'server'
+
 # Convenience for the collection playbooks: when the inventory follows the
 # rke2_servers/rke2_agents contract, joining nodes derive the registration
 # URL and fetch the token from the bootstrap host automatically

@@ -1,0 +1,24 @@
+---
+- name: "Validate: {{ rke2_refused_case.name }}"
+  block:
+    - name: "Run the guards: {{ rke2_refused_case.name }}"
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: server_files_validate
+      vars:
+        rke2_audit_policy: "{{ rke2_refused_case.vars.rke2_audit_policy | default({}) }}"
+        rke2_pss_config: "{{ rke2_refused_case.vars.rke2_pss_config | default({}) }}"
+        rke2_pss_config_path: "{{ rke2_refused_case.vars.rke2_pss_config_path | default('/etc/rancher/rke2/pss.yaml') }}"
+        rke2_server_files: "{{ rke2_refused_case.vars.rke2_server_files | default([]) }}"
+        rke2_extra_config: "{{ rke2_refused_case.vars.rke2_extra_config | default({}) }}"
+        rke2_kube_apiserver_arg: "{{ rke2_refused_case.vars.rke2_kube_apiserver_arg | default([]) }}"
+
+    - name: "Guard did not fire: {{ rke2_refused_case.name }}"
+      ansible.builtin.fail:
+        msg: "{{ rke2_refused_case.name }} was accepted"
+  rescue:
+    - name: "Assert it was the guard that refused: {{ rke2_refused_case.name }}"
+      ansible.builtin.assert:
+        that:
+          - ansible_failed_task.action in ['assert', 'ansible.builtin.assert']
+        fail_msg: "{{ ansible_failed_result.msg | default(ansible_failed_result) | string }}"

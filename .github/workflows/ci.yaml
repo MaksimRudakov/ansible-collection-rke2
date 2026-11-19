@@ -34,7 +34,9 @@ jobs:
         # default: full single-node RKE2 bootstrap in a privileged container
         # el: RHEL-family install path — install.sh switches to the RPM method
         #     there, which puts the binary outside the tar layout
-        scenario: [airgap, default, el]
+        # security: audit policy, Pod Security, server files on real RKE2 —
+        #     apiserver args, audit events, PSA verdicts, one restart per change
+        scenario: [airgap, default, el, security]
     env:
       ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
     steps:

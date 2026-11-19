@@ -1,0 +1,295 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars_files:
+    - vars/main.yml
+  vars:
+    rke2_kubectl_cmd: >-
+      /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
+    rke2_apiserver_manifest: /var/lib/rancher/rke2/agent/pod-manifests/kube-apiserver.yaml
+    # A narrow rule change: the restart check must not depend on audit volume
+    rke2_step_rules:
+      - level: Metadata
+        resources: [{group: "", resources: [secrets, configmaps]}]
+      - level: None
+    rke2_privileged_pod: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: psa-probe
+      spec:
+        containers:
+          - name: probe
+            image: registry.k8s.io/pause:3.10
+            securityContext:
+              privileged: true
+  tasks:
+    - name: Keep the converge inputs for the reconfigure steps
+      ansible.builtin.include_vars:
+        file: vars/main.yml
+        name: rke2_base
+
+    - name: Wait for the node to be Ready
+      ansible.builtin.command:
+        cmd: "{{ rke2_kubectl_cmd }} wait --for=condition=Ready node --all --timeout=600s"
+      changed_when: false
+
+    # --- initial state ---------------------------------------------------------
+
+    - name: Stat role-managed control-plane files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/rancher/rke2/audit-policy.yaml
+        - /etc/rancher/rke2/pss.yaml
+        - /etc/rancher/rke2/molecule/dict.yaml
+        - /etc/rancher/rke2/molecule/raw.txt
+      register: rke2_files_stat
+
+    - name: Assert files exist with the expected modes
+      ansible.builtin.assert:
+        that:
+          - rke2_files_stat.results | map(attribute='stat.exists') | list == [true, true, true, true]
+          - rke2_files_stat.results | map(attribute='stat.mode') | list == ['0600', '0600', '0600', '0640']
+          - rke2_files_stat.results | map(attribute='stat.pw_name') | unique | list == ['root']
+
+    - name: Read server files back
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/rancher/rke2/audit-policy.yaml
+        - /etc/rancher/rke2/molecule/dict.yaml
+        - /etc/rancher/rke2/molecule/raw.txt
+      register: rke2_files_content
+
+    - name: Assert dict content is rendered as YAML and strings are written as is
+      ansible.builtin.assert:
+        that:
+          - (rke2_files_content.results[0].content | b64decode | from_yaml) == rke2_audit_policy
+          - (rke2_files_content.results[1].content | b64decode | from_yaml) == rke2_server_files[0].content
+          - (rke2_files_content.results[2].content | b64decode) == 'raw content v1\n'
+
+    - name: Read the kube-apiserver static pod manifest
+      ansible.builtin.slurp:
+        src: "{{ rke2_apiserver_manifest }}"
+      register: rke2_apiserver_pod
+
+    - name: Assert audit and Pod Security args reach kube-apiserver
+      ansible.builtin.assert:
+        that:
+          - "'--audit-policy-file=/etc/rancher/rke2/audit-policy.yaml' in rke2_args"
+          - "'--audit-log-path=/var/lib/rancher/rke2/server/logs/audit.log' in rke2_args"
+          - "'--admission-control-config-file=/etc/rancher/rke2/pss.yaml' in rke2_args"
+          # RKE2 mounts the files only when they exist at manifest generation
+          - "'/etc/rancher/rke2/audit-policy.yaml' in rke2_mounts"
+          - "'/etc/rancher/rke2/pss.yaml' in rke2_mounts"
+        fail_msg: "{{ rke2_args }}"
+      vars:
+        rke2_pod: "{{ rke2_apiserver_pod.content | b64decode | from_yaml }}"
+        rke2_args: "{{ rke2_pod.spec.containers[0].args }}"
+        rke2_mounts: "{{ rke2_pod.spec.volumes | selectattr('hostPath', 'defined') | map(attribute='hostPath.path') | list }}"
+
+    - name: Read secrets to produce an audit event
+      ansible.builtin.command:
+        cmd: "{{ rke2_kubectl_cmd }} get secrets -A"
+      changed_when: false
+
+    - name: Wait for the secrets event in audit.log
+      ansible.builtin.command:
+        cmd: grep -c '"resource":"secrets"' /var/lib/rancher/rke2/server/logs/audit.log
+      register: rke2_audit_hits
+      changed_when: false
+      failed_when: false
+      retries: 12
+      delay: 5
+      until: rke2_audit_hits.stdout | int > 0
+
+    - name: Assert audit events are written
+      ansible.builtin.assert:
+        that: rke2_audit_hits.stdout | int > 0
+
+    - name: Try a privileged pod in default (baseline enforced)
+      ansible.builtin.command:
+        cmd: "{{ rke2_kubectl_cmd }} apply --dry-run=server -n default -f -"
+        stdin: "{{ rke2_privileged_pod }}"
+      register: rke2_psa_default
+      changed_when: false
+      failed_when: false
+
+    - name: Try a privileged pod in kube-system (exempt)
+      ansible.builtin.command:
+        cmd: "{{ rke2_kubectl_cmd }} apply --dry-run=server -n kube-system -f -"
+        stdin: "{{ rke2_privileged_pod }}"
+      register: rke2_psa_exempt
+      changed_when: false
+
+    - name: Assert Pod Security enforcement follows rke2_pss_config
+      ansible.builtin.assert:
+        that:
+          - rke2_psa_default.rc != 0
+          - "'violates PodSecurity \"baseline' in rke2_psa_default.stderr"
+          - rke2_psa_exempt.rc == 0
+        fail_msg: "{{ rke2_psa_default.stderr }}"
+
+    # --- changes: one restart each ------------------------------------------
+
+    # docker-in-docker only: after a restart that replaces a static pod the
+    # kubelet loses track of the running etcd container and starts a second
+    # one that hangs on the db flock. Kill every pod on stop (the shim part of
+    # rke2-killall.sh, without its systemctl stop and cleanup) so each restart
+    # starts from a clean runtime, like a node reboot
+    - name: Install the pod killer for rke2-server stops
+      ansible.builtin.copy:
+        dest: /usr/local/bin/molecule-kill-pods.sh
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          pstree() {
+            for p in "$@"; do
+              echo "$p"
+              pstree $(ps -e -o ppid= -o pid= | awk -v p="$p" '$1 == p {print $2}')
+            done
+          }
+          shims=$(ps -e -o pid= -o args= | awk '$2 ~ "^/var/lib/rancher/rke2/data/[^/]+/bin/containerd-shim" {print $1}')
+          [ -z "$shims" ] || kill -9 $(pstree $shims) 2>/dev/null
+          exit 0
+
+    - name: Ensure the rke2-server drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/rke2-server.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Kill pods whenever rke2-server stops
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/rke2-server.service.d/molecule-kill-pods.conf
+        mode: "0644"
+        content: |
+          [Service]
+          ExecStopPost=-/usr/local/bin/molecule-kill-pods.sh
+
+    - name: Reload systemd for the drop-in
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    # Isolates "rke2-server restart in CI is broken" from the feature itself
+    - name: Restart once without changes
+      ansible.builtin.include_tasks: tasks/reconfigure.yml
+      vars:
+        rke2_step:
+          name: baseline restart
+          plain_restart: true
+
+    - name: Change a policy rule and an audit-log arg in one run
+      ansible.builtin.include_tasks: tasks/reconfigure.yml
+      vars:
+        rke2_step:
+          name: policy + config.yaml change
+          audit_policy: "{{ rke2_base.rke2_audit_policy | combine({'rules': rke2_step_rules}) }}"
+          audit_log_maxage: 7
+
+    - name: Read the regenerated kube-apiserver manifest
+      ansible.builtin.slurp:
+        src: "{{ rke2_apiserver_manifest }}"
+      register: rke2_apiserver_pod_changed
+
+    - name: Assert the new value won and the policy hash changed
+      ansible.builtin.assert:
+        that:
+          - rke2_args | select('match', '--audit-log-maxage=') | list | last == '--audit-log-maxage=7'
+          - rke2_hash_new != rke2_hash_old
+      vars:
+        rke2_args: "{{ (rke2_apiserver_pod_changed.content | b64decode | from_yaml).spec.containers[0].args }}"
+        rke2_hash_old: >-
+          {{ (rke2_apiserver_pod.content | b64decode | from_yaml).spec.containers[0].env
+             | selectattr('name', 'eq', 'FILE_HASH') | map(attribute='value') | first }}
+        rke2_hash_new: >-
+          {{ (rke2_apiserver_pod_changed.content | b64decode | from_yaml).spec.containers[0].env
+             | selectattr('name', 'eq', 'FILE_HASH') | map(attribute='value') | first }}
+
+    - name: Change a server file
+      ansible.builtin.include_tasks: tasks/reconfigure.yml
+      vars:
+        rke2_step:
+          name: server file change
+          audit_policy: "{{ rke2_base.rke2_audit_policy | combine({'rules': rke2_step_rules}) }}"
+          audit_log_maxage: 7
+          server_files:
+            - "{{ rke2_base.rke2_server_files[0] }}"
+            - "{{ rke2_base.rke2_server_files[1] | combine({'content': 'raw content v2\n'}) }}"
+
+    - name: Read the changed server file
+      ansible.builtin.slurp:
+        src: /etc/rancher/rke2/molecule/raw.txt
+      register: rke2_raw_changed
+
+    - name: Assert the server file was rewritten
+      ansible.builtin.assert:
+        that: (rke2_raw_changed.content | b64decode) == 'raw content v2\n'
+
+    # --- switch everything off ----------------------------------------------
+
+    - name: Switch audit and Pod Security off, remove a server file
+      ansible.builtin.include_tasks: tasks/reconfigure.yml
+      vars:
+        rke2_step:
+          name: disable
+          audit_policy: {}
+          pss_config: {}
+          server_files:
+            - "{{ rke2_base.rke2_server_files[0] }}"
+            - {path: /etc/rancher/rke2/molecule/raw.txt, state: absent}
+
+    - name: Stat files after switching off
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/rancher/rke2/audit-policy.yaml
+        - /etc/rancher/rke2/pss.yaml
+        - /etc/rancher/rke2/molecule/raw.txt
+      register: rke2_files_off
+
+    - name: Read config.yaml and the kube-apiserver manifest after switching off
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/rancher/rke2/config.yaml
+        - "{{ rke2_apiserver_manifest }}"
+      register: rke2_off
+
+    - name: Assert keys, args and files are gone
+      ansible.builtin.assert:
+        that:
+          - rke2_files_off.results | map(attribute='stat.exists') | list == [false, false, false]
+          - "'audit-policy-file' not in rke2_config"
+          - "'pod-security-admission-config-file' not in rke2_config"
+          - rke2_config['kube-apiserver-arg'] is not defined
+          - rke2_args | select('match', '--audit-') | list == []
+          - "'--admission-control-config-file=/etc/rancher/rke2/rke2-pss.yaml' in rke2_args"
+        fail_msg: "{{ rke2_args }}"
+      vars:
+        rke2_config: "{{ rke2_off.results[0].content | b64decode | from_yaml }}"
+        rke2_args: "{{ (rke2_off.results[1].content | b64decode | from_yaml).spec.containers[0].args }}"
+
+    - name: Re-apply the switched-off state
+      ansible.builtin.include_tasks: tasks/reconfigure.yml
+      vars:
+        rke2_step:
+          name: switched-off re-run
+          restarts: 0
+          audit_policy: {}
+          pss_config: {}
+          server_files:
+            - "{{ rke2_base.rke2_server_files[0] }}"
+            - {path: /etc/rancher/rke2/molecule/raw.txt, state: absent}
+
+    - name: Privileged pods are admitted again under the RKE2 default
+      ansible.builtin.command:
+        cmd: "{{ rke2_kubectl_cmd }} apply --dry-run=server -n default -f -"
+        stdin: "{{ rke2_privileged_pod }}"
+      changed_when: false
+      register: rke2_psa_default_off
+      retries: 12
+      delay: 5
+      until: rke2_psa_default_off.rc == 0

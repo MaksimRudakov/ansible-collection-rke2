@@ -282,6 +282,60 @@ argument_specs:
         type: dict
         default: {}
         description: Arbitrary extra keys merged into config.yaml as-is.
+      rke2_audit_policy:
+        type: dict
+        default: {}
+        description: >-
+          kube-apiserver audit policy (audit.k8s.io/v1 Policy) as a dict,
+          servers only. Written to rke2_audit_policy_path before rke2-server
+          starts; the role adds audit-policy-file and audit-log-* to
+          config.yaml itself. Empty — audit is not managed by the role.
+      rke2_audit_policy_path:
+        type: str
+        default: /etc/rancher/rke2/audit-policy.yaml
+        description: Path of the audit policy file on servers.
+      rke2_audit_log_path:
+        type: str
+        description: >-
+          kube-apiserver audit log (audit-log-path). Default —
+          <rke2_data_dir>/server/logs/audit.log. "-" logs to stdout.
+      rke2_audit_log_maxage:
+        type: int
+        default: 30
+        description: Days to keep rotated audit logs (audit-log-maxage).
+      rke2_audit_log_maxbackup:
+        type: int
+        default: 10
+        description: Rotated audit log files to keep (audit-log-maxbackup).
+      rke2_audit_log_maxsize:
+        type: int
+        default: 100
+        description: Audit log size in MB before rotation (audit-log-maxsize).
+      rke2_pss_config:
+        type: dict
+        default: {}
+        description: >-
+          Pod Security Admission configuration (apiserver.config.k8s.io/v1
+          AdmissionConfiguration with a PodSecurity plugin) as a dict, servers
+          only. Replaces the RKE2 default rke2-pss.yaml via
+          pod-security-admission-config-file. Empty — RKE2 default
+          (privileged; restricted with rke2_cis_profile).
+      rke2_pss_config_path:
+        type: str
+        default: /etc/rancher/rke2/pss.yaml
+        description: >-
+          Path of the Pod Security configuration file on servers. Must not be
+          /etc/rancher/rke2/rke2-pss.yaml (rewritten by RKE2).
+      rke2_server_files:
+        type: list
+        elements: dict
+        default: []
+        description: >-
+          Arbitrary files written on servers before rke2-server starts, items
+          are {path, content, mode (0600), owner (root), group (root), state
+          (present/absent)}. content is a dict rendered as YAML or a raw
+          string. A change restarts rke2-server. Removing an item leaves the
+          file in place — set state absent first.
       rke2_manifests:
         type: list
         elements: dict

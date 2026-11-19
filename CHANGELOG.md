@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- `node` role: `rke2_audit_policy` (+ `rke2_audit_policy_path`, `rke2_audit_log_path` / `_maxage` / `_maxbackup` / `_maxsize`) — kube-apiserver audit policy as a dict. Written on servers before `rke2-server` starts; the role adds `audit-policy-file` and `audit-log-*` to `config.yaml` itself.
+- `node` role: `rke2_pss_config` (+ `rke2_pss_config_path`) — Pod Security Admission `AdmissionConfiguration` as a dict, wired through `pod-security-admission-config-file` in place of RKE2's `rke2-pss.yaml`.
+- `node` role: `rke2_server_files` — arbitrary files on servers (dict → YAML, string as is, `state: absent` to remove), placed before the first start.
+- A change to any of these files restarts `rke2-server` through the existing handler (one restart per run, rolling with `reconfig`); `{}` removes keys and files. Structure, path collisions and duplicates in `rke2_extra_config` / `rke2_kube_apiserver_arg` are refused before the host is touched. With everything empty `config.yaml` is byte-identical to 1.8.1 — upgrading is a no-op.
+- Molecule scenario `security` (in CI): apiserver args and mounts, an audit event for `secrets`, PSA baseline verdicts, exactly one restart per change, switch-off and re-run without restart. `airgap` checks rendering against the 1.8.1 output and every guard.
+- README "Audit and Pod Security": RKE2 behaviour without the role (audit off, level-None policy file created when missing, PSA defaults and CIS exemptions), example policies, staged PSA rollout.
+
 ## [1.8.1] - 2026-11-16
 
 ### Fixed

@@ -5,6 +5,7 @@ exclude_paths:
   - .cache/
   - .github/
   - .ansible/
+  - molecule/airgap/files/config-server-1.8.1.yaml
 
 skip_list:
   # Role vars deliberately use the collection-wide rke2_ prefix instead of
