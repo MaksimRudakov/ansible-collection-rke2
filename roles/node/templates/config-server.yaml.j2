@@ -58,9 +58,23 @@ kubelet-arg:
   - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}
-{% if rke2_kube_apiserver_arg | length > 0 %}
+{% if rke2_audit_policy | length > 0 %}
+audit-policy-file: {{ rke2_audit_policy_path | string | to_json(ensure_ascii=false) }}
+{% endif %}
+{% if rke2_pss_config | length > 0 %}
+pod-security-admission-config-file: {{ rke2_pss_config_path | string | to_json(ensure_ascii=false) }}
+{% endif %}
+{# RKE2 prepends its own audit-log-* defaults once audit-policy-file is set;
+   ours come later and win (last flag wins) #}
+{% set rke2_apiserver_args = rke2_kube_apiserver_arg + ([
+     'audit-log-path=' ~ rke2_audit_log_path,
+     'audit-log-maxage=' ~ rke2_audit_log_maxage,
+     'audit-log-maxbackup=' ~ rke2_audit_log_maxbackup,
+     'audit-log-maxsize=' ~ rke2_audit_log_maxsize,
+   ] if rke2_audit_policy | length > 0 else []) %}
+{% if rke2_apiserver_args | length > 0 %}
 kube-apiserver-arg:
-{% for arg in rke2_kube_apiserver_arg %}
+{% for arg in rke2_apiserver_args %}
   - {{ arg | string | to_json(ensure_ascii=false) }}
 {% endfor %}
 {% endif %}

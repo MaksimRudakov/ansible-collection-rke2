@@ -120,7 +120,7 @@ Canonical variable reference: [`roles/node/meta/argument_specs.yml`](roles/node/
 | Node classes | `rke2_node_labels`, `rke2_node_taints`, `rke2_node_roles` (ROLES column via kubectl — kubelet may not self-assign those), `rke2_kubelet_config` (KubeletConfiguration drop-in), `rke2_kubelet_arg`, per-component args, `rke2_shutdown_grace_period` / `_critical_pods` (graceful node shutdown) |
 | Registries | `rke2_registry_mirrors`, `rke2_registry_configs` |
 | etcd | `rke2_etcd_snapshot_schedule_cron` / `_retention` / `_dir`, `rke2_etcd_expose_metrics` |
-| Security | `rke2_cis_profile` (the role provisions the etcd user and CIS sysctl automatically), `rke2_write_kubeconfig_mode`, `rke2_no_log` |
+| Security | `rke2_cis_profile` (the role provisions the etcd user and CIS sysctl automatically), `rke2_audit_policy` / `rke2_audit_log_*`, `rke2_pss_config`, `rke2_server_files` (see [Audit and Pod Security](#audit-and-pod-security)), `rke2_write_kubeconfig_mode`, `rke2_no_log` |
 | Day-2 plumbing | `rke2_kubectl_delegate`, `rke2_node_name`, `rke2_drain_timeout`, `rke2_ready_timeout` |
 
 Every variable is demonstrated with commentary in [`examples/inventory/group_vars/rke2_cluster.yml`](examples/inventory/group_vars/rke2_cluster.yml).
@@ -161,6 +161,70 @@ Things to know:
 - A pod whose `terminationGracePeriodSeconds` exceeds the remaining window is still killed when the window closes.
 - Verification on a node: `systemd-inhibit --list` must show a `kubelet ... shutdown ... delay` line; `systemd-analyze cat-config systemd/logind.conf` shows which drop-in wins. `rke2_shutdown_verify_inhibitor: false` disables the post-start assertion where logind is not usable (containers).
 - `uninstall` removes both logind drop-ins (the role's and kubelet's).
+
+## Audit and Pod Security
+
+Servers only. Two dicts drive kube-apiserver audit and Pod Security Admission; the role writes the files **before** `rke2-server` starts (on a fresh node too) and adds the matching keys to `config.yaml` itself — do not duplicate them in `rke2_kube_apiserver_arg` / `rke2_extra_config`, the role refuses that.
+
+| Variable | Written to | Added to `config.yaml` |
+|---|---|---|
+| `rke2_audit_policy` (audit.k8s.io/v1 `Policy`) | `rke2_audit_policy_path` (`/etc/rancher/rke2/audit-policy.yaml`) | `audit-policy-file`, `kube-apiserver-arg`: `audit-log-path` / `-maxage` / `-maxbackup` / `-maxsize` from `rke2_audit_log_*` (30 days / 10 files / 100 MB, log in `<data-dir>/server/logs/audit.log`) |
+| `rke2_pss_config` (apiserver.config.k8s.io/v1 `AdmissionConfiguration`) | `rke2_pss_config_path` (`/etc/rancher/rke2/pss.yaml`) | `pod-security-admission-config-file` (replaces RKE2's `rke2-pss.yaml`) |
+| `rke2_server_files` (`[{path, content, mode, owner, group, state}]`) | `path`, `0600 root:root` by default | nothing — reference the file from a component arg yourself |
+
+Behaviour:
+
+- A change to any of these files restarts `rke2-server` through the same handler as `config.yaml` — one restart per run even when both change. Roll it out with `reconfig` (`serial: 1`, waits for Ready). RKE2 hashes the mounted files into the kube-apiserver static pod, so a content-only change does recreate the pod.
+- Setting a dict back to `{}` removes the keys and the file, then restarts. For `rke2_server_files` set `state: absent` on the item (dropping the item leaves the file). With everything empty `config.yaml` is byte-identical to 1.8.1 — upgrading the collection is a no-op.
+- The structure is checked before anything on the host changes: `apiVersion`/`kind`, non-empty `rules`, a `PodSecurity` plugin, absolute and unique `rke2_server_files` paths.
+- RKE2 mounts a file into a control-plane static pod only when a component arg points at it and the file exists at manifest generation — that is why files are placed before the first start. A file used by, e.g., `authentication-config=` in `rke2_kube_apiserver_arg` is picked up automatically.
+
+What RKE2 does without the role (checked in RKE2 v1.36.6 source and on v1.36.4 clusters):
+
+- **Audit is off** unless `audit-policy-file` or `profile` is set: no `--audit-*` args at all. Once the key is set RKE2 adds `--audit-log-maxage=30 --audit-log-maxbackup=10 --audit-log-maxsize=100` and `--audit-log-path=<data-dir>/server/logs/audit.log` itself; the role passes its values after those, the last flag wins.
+- **A missing policy file is created** by RKE2 with a single `level: None` rule (logs nothing) and never overwritten afterwards. With `rke2_cis_profile` and no `rke2_audit_policy` that is exactly what runs — CIS mode gets audit args but an empty policy. The role marks its own file and removes only that one when switched off, so the RKE2-generated file in CIS mode is left alone.
+- **Pod Security:** without `pod-security-admission-config-file` RKE2 rewrites `/etc/rancher/rke2/rke2-pss.yaml` on every start — `privileged` everywhere, or `restricted` with exemptions for its own namespaces under `rke2_cis_profile`. With `rke2_pss_config` set your file wins in both modes (`rke2_pss_config_path` may not point at `rke2-pss.yaml`). In CIS mode keep the exemptions RKE2 needs (`kube-system`, `compliance-operator-system`, `tigera-operator`) in your file.
+
+Minimal policy — metadata for everything, full bodies for RBAC, request bodies for interactive access, noise dropped:
+
+```yaml
+rke2_audit_policy:
+  apiVersion: audit.k8s.io/v1
+  kind: Policy
+  omitStages: [RequestReceived]
+  rules:
+    - level: None
+      users: ["system:kube-proxy"]
+      verbs: [watch]
+    - level: None
+      nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/version"]
+    - level: RequestResponse
+      resources: [{group: rbac.authorization.k8s.io}]
+    - level: Metadata  # never log secret payloads
+      resources: [{group: "", resources: [secrets, configmaps, serviceaccounts/token]}]
+    - level: Request
+      resources: [{group: "", resources: [pods/exec, pods/attach, pods/portforward]}]
+    - level: Metadata
+```
+
+Pod Security — introduce in stages: observe with `audit`/`warn` first (violations show up in `audit.log` annotations and as `kubectl` warnings), switch `enforce` on once the namespaces are clean or exempted:
+
+```yaml
+rke2_pss_config:
+  apiVersion: apiserver.config.k8s.io/v1
+  kind: AdmissionConfiguration
+  plugins:
+    - name: PodSecurity
+      configuration:
+        apiVersion: pod-security.admission.config.k8s.io/v1
+        kind: PodSecurityConfiguration
+        defaults: {enforce: privileged, audit: baseline, warn: baseline}  # stage 1
+        # stage 2: {enforce: baseline, audit: restricted, warn: restricted}
+        exemptions:
+          namespaces: [kube-system, monitoring]
+```
+
+Per-namespace labels (`pod-security.kubernetes.io/enforce`) still override these defaults. Shipping `audit.log` to Loki/SIEM is up to the log agent on the hosts.
 
 ## Monitoring control-plane components
 
@@ -247,6 +311,7 @@ Full table with per-entry-point notes: [`roles/node/README.md`](roles/node/READM
 export ANSIBLE_COLLECTIONS_PATH=$(mktemp -d):$HOME/.ansible/collections   # NOT the checkout's collections root
 molecule test -s airgap    # fast: mock mirror, URL rewrites, downgrade guard
 molecule test              # full: single-node RKE2 + Fleet in a privileged container
+molecule test -s security  # audit policy, Pod Security, server files on real RKE2
 ```
 
 > [!CAUTION]

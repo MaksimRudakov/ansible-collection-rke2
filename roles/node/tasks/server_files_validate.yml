@@ -1,0 +1,88 @@
+---
+# Pure asserts: included before install.yml from main.yml and again from
+# config.yml for standalone runs — nothing on the host is touched on failure
+- name: Validate rke2_audit_policy
+  ansible.builtin.assert:
+    that:
+      - rke2_audit_policy is mapping
+      - rke2_audit_policy.apiVersion | default('') == 'audit.k8s.io/v1'
+      - rke2_audit_policy.kind | default('') == 'Policy'
+      - rke2_audit_policy.rules | default('') is sequence
+      - rke2_audit_policy.rules | default('') is not string
+      - rke2_audit_policy.rules | default([]) | length > 0
+    fail_msg: >-
+      rke2_audit_policy must be an audit.k8s.io/v1 Policy with a non-empty
+      rules list (or {} to leave audit unmanaged)
+    quiet: true
+  when: rke2_audit_policy | length > 0
+
+- name: Validate rke2_pss_config
+  ansible.builtin.assert:
+    that:
+      - rke2_pss_config is mapping
+      - rke2_pss_config.apiVersion | default('') == 'apiserver.config.k8s.io/v1'
+      - rke2_pss_config.kind | default('') == 'AdmissionConfiguration'
+      - "'PodSecurity' in (rke2_pss_config.plugins | default([]) | map(attribute='name', default='') | list)"
+      - rke2_pss_config_path != '/etc/rancher/rke2/rke2-pss.yaml'
+    fail_msg: >-
+      rke2_pss_config must be an apiserver.config.k8s.io/v1
+      AdmissionConfiguration with a PodSecurity plugin (or {} for the RKE2
+      default). rke2_pss_config_path must not be rke2-pss.yaml — RKE2
+      rewrites that file on every start
+    quiet: true
+  when: rke2_pss_config | length > 0
+
+- name: Validate rke2_server_files
+  ansible.builtin.assert:
+    that:
+      - item.path is defined
+      - item.path is string
+      - item.path is match('/')
+      - item.state | default('present') in ['present', 'absent']
+      - item.content is defined or item.state | default('present') == 'absent'
+      - item.path not in rke2_server_files_reserved
+      - rke2_server_files | map(attribute='path', default='') | select('equalto', item.path) | list | length == 1
+    fail_msg: >-
+      rke2_server_files[{{ idx }}]: needs an absolute, unique path and content
+      (unless state: absent); {{ rke2_server_files_reserved | join(', ') }}
+      are managed by the role
+    quiet: true
+  loop: "{{ rke2_server_files }}"
+  loop_control:
+    index_var: idx
+    label: "{{ item.path | default(idx) }}"
+  vars:
+    rke2_server_files_reserved:
+      - "{{ rke2_audit_policy_path }}"
+      - "{{ rke2_pss_config_path }}"
+      - /etc/rancher/rke2/config.yaml
+      - /etc/rancher/rke2/registries.yaml
+      - /etc/rancher/rke2/rke2-pss.yaml
+
+# The role renders these keys itself; a second copy in rke2_extra_config
+# (a duplicate YAML key) or in kube-apiserver-arg (last flag wins, RKE2 adds
+# its own audit defaults too) would make the result depend on ordering
+- name: Refuse audit / PSA settings duplicated outside the dedicated variables
+  ansible.builtin.assert:
+    that: rke2_security_conflicts | length == 0
+    fail_msg: >-
+      {{ rke2_security_conflicts | join(', ') }} set in rke2_extra_config or
+      rke2_kube_apiserver_arg while the role manages audit / Pod Security
+      (rke2_audit_policy / rke2_pss_config). Drop them there — the role adds
+      audit-policy-file, pod-security-admission-config-file and audit-log-*
+      itself (tune with rke2_audit_log_*)
+  vars:
+    rke2_security_owned_keys: >-
+      {{ (['audit-policy-file'] if rke2_audit_policy | length > 0 else [])
+         + (['pod-security-admission-config-file'] if rke2_pss_config | length > 0 else []) }}
+    rke2_security_owned_args: >-
+      {{ (['audit-policy-file', 'audit-log-path', 'audit-log-maxage', 'audit-log-maxbackup', 'audit-log-maxsize']
+          if rke2_audit_policy | length > 0 else [])
+         + (['admission-control-config-file'] if rke2_pss_config | length > 0 else []) }}
+    rke2_security_all_args: >-
+      {{ (rke2_kube_apiserver_arg + ([rke2_extra_config['kube-apiserver-arg']] | flatten
+          if 'kube-apiserver-arg' in rke2_extra_config else []))
+         | map('string') | map('regex_replace', '^(?:--)?([^=]+)=?.*$', '\1') | list }}
+    rke2_security_conflicts: >-
+      {{ (rke2_extra_config.keys() | list | intersect(rke2_security_owned_keys))
+         + (rke2_security_all_args | intersect(rke2_security_owned_args)) }}

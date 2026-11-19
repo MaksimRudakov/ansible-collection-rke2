@@ -1,0 +1,46 @@
+---
+# Re-apply tasks_from: config with rke2_step overrides the way reconfig.yml
+# does, then assert how many times rke2-server was (re)started (default 1)
+- name: "Remember the journal position: {{ rke2_step.name }}"
+  ansible.builtin.command:
+    cmd: journalctl --show-cursor -n 0 -q
+  register: rke2_journal_cursor
+  changed_when: false
+
+- name: "Apply config: {{ rke2_step.name }}"
+  ansible.builtin.include_role:
+    name: maksimrudakov.rke2.node
+    tasks_from: config
+  vars:
+    rke2_audit_policy: "{{ rke2_step.audit_policy | default(rke2_base.rke2_audit_policy) }}"
+    rke2_audit_log_maxage: "{{ rke2_step.audit_log_maxage | default(rke2_base.rke2_audit_log_maxage) }}"
+    rke2_pss_config: "{{ rke2_step.pss_config | default(rke2_base.rke2_pss_config) }}"
+    rke2_server_files: "{{ rke2_step.server_files | default(rke2_base.rke2_server_files) }}"
+
+- name: "Restart now: {{ rke2_step.name }}"
+  ansible.builtin.meta: flush_handlers
+
+- name: "Count rke2-server starts: {{ rke2_step.name }}"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      journalctl -u rke2-server.service -o cat -q
+      --after-cursor='{{ rke2_journal_cursor.stdout | regex_replace('^-- cursor: ', '') }}'
+      | grep -cE '^Started (rke2-server|Rancher Kubernetes Engine)' || true
+    executable: /bin/bash
+  register: rke2_starts
+  changed_when: false
+
+- name: "Assert the restart count: {{ rke2_step.name }}"
+  ansible.builtin.assert:
+    that: rke2_starts.stdout | int == rke2_step.restarts | default(1)
+    fail_msg: "rke2-server started {{ rke2_starts.stdout }} times, expected {{ rke2_step.restarts | default(1) }}"
+
+- name: "Wait for the API: {{ rke2_step.name }}"
+  ansible.builtin.command:
+    cmd: "{{ rke2_kubectl_cmd }} get --raw /readyz"
+  register: rke2_readyz
+  changed_when: false
+  retries: 60
+  delay: 5
+  until: rke2_readyz.rc == 0

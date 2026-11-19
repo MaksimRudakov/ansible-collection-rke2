@@ -17,3 +17,5 @@ rules:
 
 ignore:
   - .github/
+  # byte-exact rendering fixture, compared verbatim
+  - molecule/airgap/files/config-server-1.8.1.yaml

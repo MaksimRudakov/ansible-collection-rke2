@@ -1,0 +1,135 @@
+---
+# config-server.yaml rendering for audit / Pod Security and the validation
+# guards. No RKE2 needed: the real-cluster behaviour lives in the security
+# scenario
+- name: Check audit / Pod Security rendering and guards
+  vars:
+    rke2_tpl_dir: /var/tmp/rke2-security-config
+    rke2_tpl_src: "{{ playbook_dir }}/../../roles/node/templates/config-server.yaml.j2"
+    rke2_role: server
+    rke2_first_server: true
+    # same input as files/config-server-1.8.1.yaml was rendered from
+    rke2_kube_apiserver_arg: [oidc-issuer-url=https://sso.example.com]
+    rke2_extra_config: {etcd-s3: true}
+    rke2_test_audit_policy:
+      apiVersion: audit.k8s.io/v1
+      kind: Policy
+      rules: [{level: Metadata}]
+    rke2_test_pss_config:
+      apiVersion: apiserver.config.k8s.io/v1
+      kind: AdmissionConfiguration
+      plugins:
+        - name: PodSecurity
+          configuration:
+            apiVersion: pod-security.admission.config.k8s.io/v1
+            kind: PodSecurityConfiguration
+            defaults: {enforce: baseline}
+  block:
+    - name: Create a scratch dir for rendered templates
+      ansible.builtin.file:
+        path: "{{ rke2_tpl_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Render config.yaml with everything off
+      ansible.builtin.template:
+        src: "{{ rke2_tpl_src }}"
+        dest: "{{ rke2_tpl_dir }}/disabled.yaml"
+        mode: "0600"
+
+    - name: Render config.yaml with audit and Pod Security on
+      ansible.builtin.template:
+        src: "{{ rke2_tpl_src }}"
+        dest: "{{ rke2_tpl_dir }}/enabled.yaml"
+        mode: "0600"
+      vars:
+        rke2_audit_policy: "{{ rke2_test_audit_policy }}"
+        rke2_pss_config: "{{ rke2_test_pss_config }}"
+        rke2_audit_log_maxage: 7
+
+    - name: Read rendered configs back
+      ansible.builtin.slurp:
+        src: "{{ rke2_tpl_dir }}/{{ item }}.yaml"
+      loop: [disabled, enabled]
+      register: rke2_security_rendered
+
+    - name: Assert defaults render byte-identical to 1.8.1 (no restart on upgrade)
+      ansible.builtin.assert:
+        that:
+          - rke2_security_rendered.results[0].content | b64decode
+            == lookup('ansible.builtin.file', playbook_dir ~ '/files/config-server-1.8.1.yaml', rstrip=false)
+        fail_msg: "{{ rke2_security_rendered.results[0].content | b64decode }}"
+
+    - name: Assert audit / Pod Security keys and args are rendered
+      ansible.builtin.assert:
+        that:
+          - rke2_on['audit-policy-file'] == '/etc/rancher/rke2/audit-policy.yaml'
+          - rke2_on['pod-security-admission-config-file'] == '/etc/rancher/rke2/pss.yaml'
+          - rke2_on['kube-apiserver-arg'] == [
+              'oidc-issuer-url=https://sso.example.com',
+              'audit-log-path=/var/lib/rancher/rke2/server/logs/audit.log',
+              'audit-log-maxage=7',
+              'audit-log-maxbackup=10',
+              'audit-log-maxsize=100']
+          - rke2_on['etcd-s3']
+      vars:
+        rke2_on: "{{ rke2_security_rendered.results[1].content | b64decode | from_yaml }}"
+
+    - name: Accept a valid configuration
+      ansible.builtin.include_role:
+        name: maksimrudakov.rke2.node
+        tasks_from: server_files_validate
+      vars:
+        rke2_audit_policy: "{{ rke2_test_audit_policy }}"
+        rke2_pss_config: "{{ rke2_test_pss_config }}"
+        rke2_server_files:
+          - {path: /etc/rancher/rke2/authn.yaml, content: {a: b}}
+          - {path: /etc/rancher/rke2/old.yaml, state: absent}
+
+    - name: Refuse invalid or conflicting configurations
+      ansible.builtin.include_tasks: security_refused.yml
+      loop:
+        - name: audit-policy-file duplicated in rke2_extra_config
+          vars:
+            rke2_audit_policy: "{{ rke2_test_audit_policy }}"
+            rke2_extra_config: {audit-policy-file: /tmp/p.yaml}
+        - name: audit-log-* duplicated in rke2_kube_apiserver_arg
+          vars:
+            rke2_audit_policy: "{{ rke2_test_audit_policy }}"
+            rke2_kube_apiserver_arg: [--audit-log-maxage=1]
+        - name: admission-control-config-file in extra kube-apiserver-arg
+          vars:
+            rke2_pss_config: "{{ rke2_test_pss_config }}"
+            rke2_extra_config: {kube-apiserver-arg: [admission-control-config-file=/x.yaml]}
+        - name: audit policy without rules
+          vars:
+            rke2_audit_policy: {apiVersion: audit.k8s.io/v1, kind: Policy, rules: []}
+        - name: admission config without PodSecurity
+          vars:
+            rke2_pss_config: {apiVersion: apiserver.config.k8s.io/v1, kind: AdmissionConfiguration, plugins: [{name: EventRateLimit}]}
+        - name: Pod Security config at the RKE2-owned path
+          vars:
+            rke2_pss_config: "{{ rke2_test_pss_config }}"
+            rke2_pss_config_path: /etc/rancher/rke2/rke2-pss.yaml
+        - name: server file with a relative path
+          vars:
+            rke2_server_files: [{path: authn.yaml, content: x}]
+        - name: server file without content
+          vars:
+            rke2_server_files: [{path: /etc/rancher/rke2/authn.yaml}]
+        - name: duplicated server file path
+          vars:
+            rke2_server_files: [{path: /etc/a.yaml, content: x}, {path: /etc/a.yaml, content: y}]
+        - name: server file over the audit policy
+          vars:
+            rke2_audit_policy: "{{ rke2_test_audit_policy }}"
+            rke2_server_files: [{path: /etc/rancher/rke2/audit-policy.yaml, content: x}]
+      loop_control:
+        loop_var: rke2_refused_case
+        label: "{{ rke2_refused_case.name }}"
+
+  always:
+    - name: Remove the scratch dir
+      ansible.builtin.file:
+        path: "{{ rke2_tpl_dir }}"
+        state: absent

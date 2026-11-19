@@ -65,3 +65,6 @@
 
     - name: Check template escaping of user-supplied strings
       ansible.builtin.include_tasks: tasks/template_escaping.yml
+
+    - name: Check audit / Pod Security rendering and guards
+      ansible.builtin.include_tasks: tasks/security_config.yml

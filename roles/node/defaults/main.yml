@@ -173,6 +173,36 @@ rke2_etcd_arg: []
 # Covers any RKE2 option not exposed as a dedicated variable
 rke2_extra_config: {}
 
+# --- Audit (servers only) -----------------------------------------------------
+# audit.k8s.io/v1 Policy as a dict. Empty = the role does not manage audit
+# (RKE2 default: off; with rke2_cis_profile RKE2 logs with a level-None policy)
+rke2_audit_policy: {}
+rke2_audit_policy_path: /etc/rancher/rke2/audit-policy.yaml
+rke2_audit_log_path: "{{ rke2_data_dir }}/server/logs/audit.log"
+rke2_audit_log_maxage: 30  # days
+rke2_audit_log_maxbackup: 10
+rke2_audit_log_maxsize: 100  # MB
+
+# --- Pod Security Admission (servers only) ------------------------------------
+# apiserver.config.k8s.io/v1 AdmissionConfiguration as a dict. Empty = RKE2
+# default rke2-pss.yaml (privileged; restricted with rke2_cis_profile)
+rke2_pss_config: {}
+rke2_pss_config_path: /etc/rancher/rke2/pss.yaml
+
+# --- Arbitrary server-side files ----------------------------------------------
+# Files a server needs before rke2-server starts (structured authn, admission
+# webhooks kubeconfig, ...). A change restarts rke2-server. RKE2 mounts a file
+# into a control-plane static pod only when a component arg references it.
+# content: dict → YAML, string → as is. Removing an item leaves the file in
+# place — set state: absent first
+rke2_server_files: []
+# - path: /etc/rancher/rke2/authn.yaml
+#   content: {...}
+#   mode: "0600"     # default
+#   owner: root      # default
+#   group: root      # default
+#   state: present   # absent removes the file
+
 # Arbitrary manifests deployed to the server manifests directory (servers
 # only): HelmChartConfig for any packaged component, HelmChart, plain
 # resources. content is a dict (rendered as YAML) or a raw string
