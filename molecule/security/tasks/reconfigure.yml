@@ -50,10 +50,25 @@
               tail -n 80 "$f" || true
             done
           done
-          echo '--- kubelet.log'
-          tail -n 80 /var/lib/rancher/rke2/agent/logs/kubelet.log || true
-          echo '--- containerd.log'
-          tail -n 60 /var/lib/rancher/rke2/agent/containerd/containerd.log || true
+          echo '--- etcd processes'
+          ps -eo pid,ppid,stat,lstart,cmd | grep -E '[e]tcd|[c]ontainerd-shim' || true
+          echo '--- etcd db holders'
+          # fuser may be missing in the image: scan /proc fds instead
+          for fd in /proc/[0-9]*/fd/*; do
+            [ "$(readlink "$fd" 2>/dev/null)" = /var/lib/rancher/rke2/server/db/etcd/member/snap/db ] || continue
+            p=${fd#/proc/}; p=${p%%/*}
+            echo "pid $p: $(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null)"
+          done
+          grep -E '^[0-9]+: (POSIX|FLOCK)' /proc/locks || true
+          for p in $(pgrep -x etcd); do
+            echo "pid $p cgroup: $(cat /proc/$p/cgroup 2>/dev/null | tr '\n' ' ')"
+          done
+          echo '--- kubelet.log (etcd / kube-apiserver / kill)'
+          grep -E 'etcd|kube-apiserver|Killing|probe|SyncLoop (ADD|REMOVE|DELETE)' \
+            /var/lib/rancher/rke2/agent/logs/kubelet.log | grep -v 'Error updating node status' | tail -n 150 || true
+          echo '--- containerd.log (etcd / kube-apiserver / stop)'
+          grep -E 'etcd|kube-apiserver|StopPodSandbox|TaskExit|shim disconnected' \
+            /var/lib/rancher/rke2/agent/containerd/containerd.log | tail -n 150 || true
         executable: /bin/bash
       register: rke2_diag
       changed_when: false
