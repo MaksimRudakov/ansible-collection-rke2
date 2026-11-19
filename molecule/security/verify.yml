@@ -134,6 +134,39 @@
 
     # --- changes: one restart each ------------------------------------------
 
+    # docker-in-docker only: after a restart that replaces a static pod the
+    # kubelet loses track of the running etcd container and starts a second
+    # one that hangs on the db flock. Kill every pod on stop (the shim part of
+    # rke2-killall.sh, without its systemctl stop and cleanup) so each restart
+    # starts from a clean runtime, like a node reboot
+    - name: Install the pod killer for rke2-server stops
+      ansible.builtin.copy:
+        dest: /usr/local/bin/molecule-kill-pods.sh
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          pstree() {
+            for p in "$@"; do
+              echo "$p"
+              pstree $(ps -e -o ppid= -o pid= | awk -v p="$p" '$1 == p {print $2}')
+            done
+          }
+          shims=$(ps -e -o pid= -o args= | awk '$2 ~ "^/var/lib/rancher/rke2/data/[^/]+/bin/containerd-shim" {print $1}')
+          [ -z "$shims" ] || kill -9 $(pstree $shims) 2>/dev/null
+          exit 0
+
+    - name: Kill pods whenever rke2-server stops
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/rke2-server.service.d/molecule-kill-pods.conf
+        mode: "0644"
+        content: |
+          [Service]
+          ExecStopPost=-/usr/local/bin/molecule-kill-pods.sh
+
+    - name: Reload systemd for the drop-in
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
     # Isolates "rke2-server restart in CI is broken" from the feature itself
     - name: Restart once without changes
       ansible.builtin.include_tasks: tasks/reconfigure.yml
