@@ -17,8 +17,35 @@
     rke2_pss_config: "{{ rke2_step.pss_config | default(rke2_base.rke2_pss_config) }}"
     rke2_server_files: "{{ rke2_step.server_files | default(rke2_base.rke2_server_files) }}"
 
-- name: "Restart now: {{ rke2_step.name }}"
-  ansible.builtin.meta: flush_handlers
+- name: "Restart: {{ rke2_step.name }}"
+  block:
+    - name: "Restart now: {{ rke2_step.name }}"
+      ansible.builtin.meta: flush_handlers
+  rescue:
+    - name: "Collect rke2-server diagnostics: {{ rke2_step.name }}"
+      ansible.builtin.shell:
+        cmd: |
+          crictl() { crictl "$@"; }
+          systemctl status rke2-server --no-pager -l || true
+          echo '--- journal'
+          journalctl -u rke2-server -o short-precise --no-pager -n 300 || true
+          echo '--- containers'
+          crictl ps -a || true
+          echo '--- kube-apiserver'
+          for c in $(crictl ps -a -q --name kube-apiserver | head -2); do
+            crictl logs --tail 60 "$c" 2>&1 || true
+          done
+        executable: /bin/bash
+      register: rke2_diag
+      changed_when: false
+
+    - name: "Show rke2-server diagnostics: {{ rke2_step.name }}"
+      ansible.builtin.debug:
+        var: rke2_diag.stdout_lines
+
+    - name: "Fail after diagnostics: {{ rke2_step.name }}"
+      ansible.builtin.fail:
+        msg: "rke2-server restart failed: {{ ansible_failed_result.msg | default('') }}"
 
 - name: "Count rke2-server starts: {{ rke2_step.name }}"
   ansible.builtin.shell:
